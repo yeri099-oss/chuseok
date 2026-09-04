@@ -100,6 +100,19 @@ nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;b
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
 .modal{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:420px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:90vh;overflow:auto}
 .modal h3{margin:0 0 10px;font-size:18px;color:var(--tc-dark)}
+.modal.wide{max-width:860px;padding:24px}
+.modal.wide input,.modal.wide select{font-size:18px;padding:12px 14px}
+.modal.wide label.f{font-size:14px}
+.modal.wide h3{font-size:22px}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:640px){.qgrid{grid-template-columns:1fr}}
+.qrow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}
+.qrow .n{flex:1;font-size:16px;font-weight:600;line-height:1.3}
+.qrow .n small{display:block;color:var(--muted);font-weight:500;font-size:13px}
+.qrow .qty button{min-width:52px;padding:10px 0;font-size:22px}
+.qrow .qty input{width:64px;font-size:20px;padding:8px 4px;text-align:center;border:0;border-radius:0;font-weight:800}
+.qrow.on{border-color:var(--tc);background:var(--tc-light)}
+.modal.wide .btns button{padding:14px;font-size:17px}
 .modal .btns{display:flex;gap:8px;margin-top:14px}
 .modal .btns button{flex:1}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#2b2622;color:#fff;padding:10px 18px;border-radius:999px;z-index:60;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
@@ -134,6 +147,14 @@ nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;b
 .tblwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:12px}
 table{border-collapse:collapse;width:100%;font-size:13px;min-width:900px}
 th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+#listArea table{min-width:0;table-layout:auto}
+#listArea th,#listArea td{padding:7px 6px;white-space:nowrap;vertical-align:middle}
+#listArea td.items{white-space:pre-line;min-width:150px;line-height:1.35}
+#listArea td.memo{white-space:normal;min-width:90px;max-width:160px}
+#listArea td .pill{white-space:nowrap}
+#listArea td.acts{white-space:nowrap;width:1%}
+#listArea td.acts button{display:block;width:100%;margin:2px 0;padding:4px 8px;font-size:12px}
+@media(min-width:1100px){#listArea td.acts button{display:inline-block;width:auto;margin:0 2px}}
 th{background:#f6f1eb;position:sticky;top:0;cursor:pointer;user-select:none;font-weight:700}
 th .arr{color:var(--tc);margin-left:4px}
 td.items{white-space:pre-line;min-width:180px}
@@ -769,7 +790,7 @@ function renderAdmin(app){
   ({list:renderAdminList, summary:renderAdminSummary, menu:renderAdminMenu, settings:renderAdminSettings, log:renderAdminLog}[tab]||renderAdminList)(body);
 }
 
-const COLS = [["source","접수"],["name","주문자명"],["phone","전화번호"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계금액"],["pickupDate","픽업날짜"],["pickupTime","픽업시간"],["depositor","입금자명"],["paid","입금여부"],["createdAt","신청일시"],["memo","요청사항"]];
+const COLS = [["name","주문자명"],["phone","전화번호"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계"],["pickupDate","픽업날짜"],["pickupTime","픽업시간"],["depositor","입금자명"],["paid","입금여부"],["memo","요청사항"]];
 function orderRows(){
   return ORDERS.map(o => ({ ...o, itemsText:(o.items||[]).map(i => `${i.name} ${i.qty}`).join("\n"), createdMs: toDate(o.createdAt)?toDate(o.createdAt).getTime():0, phoneText: fmtPhone(o.phone) }));
 }
@@ -791,8 +812,6 @@ function renderAdminList(body){
   body.innerHTML = `
     ${isStaff ? `<div class="row" style="margin:12px 0;gap:10px;flex-wrap:wrap"><button id="addOrderBtnTop" style="padding:14px 22px;font-size:17px">+ 전화 예약 바로 입력</button><span class="hint">전화로 받은 예약을 이 버튼으로 바로 입력하세요. 주문자명만 있어도 저장되고, 나머지는 '수정'으로 채울 수 있습니다.</span></div>` : ""}
     ${pend.length ? `<div class="emph" style="display:flex;align-items:center;gap:8px"><span style="flex:1">비밀번호 초기화 요청 ${pend.length}건이 있습니다. (${pend.map(r => esc(r.name)).join(", ")})</span><button class="sm" id="goResets">처리하러 가기</button></div>` : ""}
-    <div class="stats"><div class="stat">예약 건수<b>${all.length}</b></div><div class="stat">입금완료<b style="color:var(--ok)">${paid.length}</b></div><div class="stat">고객 입금표시<b style="color:#2b5aa6">${all.filter(o=>!o.paid&&o.customerPaid).length}</b></div><div class="stat">입금대기<b style="color:#b3741f">${all.length-paid.length}</b></div><div class="stat">취소<b style="color:#888">${ORDERS.length-all.length}</b></div><div class="stat">총 수량<b>${all.reduce((s,o)=>s+(o.qtyTotal||0),0)}</b></div><div class="stat">총 금액<b>${won(all.reduce((s,o)=>s+(o.total||0),0))}</b></div><div class="stat">입금액<b>${won(paid.reduce((s,o)=>s+(o.total||0),0))}</b></div></div>
-    <div class="stats">${Object.entries(perItem).map(([n,q]) => `<div class="stat">${esc(n)}<b>${q}</b></div>`).join("") || ""}</div>
     <div class="toolbar"><input id="q" placeholder="검색" value="${esc(adminQ)}"><label class="row" style="font-size:13px;gap:4px"><input type="checkbox" id="showCancel" style="width:18px" ${showCancelled?"checked":""}>취소 포함</label><div class="spacer"></div><span class="hint" id="rowCount">${rows.length}건</span><button id="addOrderBtn">+ 전화 예약 추가</button><button class="ok" id="xlsBtn">엑셀 다운로드</button></div>
     <div id="listArea"></div>
     <p class="hint">제목을 누르면 정렬(다시 누르면 역순)됩니다. 입금여부 칸을 체크하면 고객 화면에 '예약이 완료되었습니다'로 표시됩니다. '계정' 버튼은 아직 가입하지 않은 전화 예약 고객의 계정을 임시 비밀번호 ${TEMP_PW}으로 만들어 링크로 예약을 확인할 수 있게 합니다.</p>`;
@@ -808,14 +827,13 @@ function renderListTable(){
   const area = $("#listArea"); if(!area) return;
   const rows = filteredRows();
   const rc = $("#rowCount"); if(rc) rc.textContent = rows.length + "건";
-  area.innerHTML = `<div class="tblwrap"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}">${l}${adminSort.key===k?`<span class="arr">${adminSort.dir>0?"▲":"▼"}</span>`:""}</th>`).join("")}<th>상태</th><th></th></tr></thead>
+  area.innerHTML = `<div class="tblwrap"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}">${l}${adminSort.key===k?`<span class="arr">${adminSort.dir>0?"▲":"▼"}</span>`:""}</th>`).join("")}<th></th></tr></thead>
     <tbody>${rows.map(r => `<tr class="${r.status==="cancelled"?"cancelled":""} ${r.paid?"paid":""}">
-      <td class="nol">${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${r.pickupDate ? esc(fmtPickDate(r.pickupDate)) : `<span class="hint">미정</span>`}</td><td>${r.pickupTime ? esc(r.pickupTime) : `<span class="hint">미정</span>`}</td><td>${esc(r.depositor)}</td>
+      <td><b>${esc(r.name)}</b><br>${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}${r.status==="cancelled"?` <span class="pill cancel">취소</span>`:""}</td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${r.pickupDate ? esc(fmtPickDate(r.pickupDate)) : `<span class="hint">미정</span>`}</td><td>${r.pickupTime ? esc(r.pickupTime) : `<span class="hint">미정</span>`}</td><td>${esc(r.depositor)}</td>
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:r.customerPaid?`<span class="pill" style="background:#e8f0fb;color:#2b5aa6" title="고객이 입금완료를 표시함 ${fmtDT(r.customerPaidAt)}">고객 입금표시</span>`:`<span class="pill wait">대기</span>`}</label>`}</td>
-      <td>${fmtDT(r.createdAt)}</td><td style="white-space:pre-line;max-width:200px">${esc(r.memo||"")}</td>
-      <td class="nol">${r.status==="cancelled"?`<span class="pill cancel">취소</span>`:r.paid?`<span class="pill ok">완료</span>`:`<span class="pill wait">입금대기</span>`}</td>
-      <td class="nol" style="white-space:nowrap">${(!isStaff && r.phone && !USERS.some(u => u.phone === r.phone && !u.replacedBy)) ? `<button class="ghost sm" data-acct="${r.id}" title="고객이 링크로 확인할 수 있게 계정 만들기">계정</button> ` : ""}<button class="ghost sm" data-edit="${r.id}">수정</button> ${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`} ${isStaff ? "" : `<button class="ghost sm" data-del="${r.id}">삭제</button>`}</td></tr>`).join("")}
-      ${rows.length===0 ? `<tr><td colspan="${COLS.length+2}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
+      <td class="memo" style="font-size:12px" title="신청 ${fmtDT(r.createdAt)}">${esc(r.memo||"")}</td>
+      <td class="nol acts"><button class="ghost sm" data-edit="${r.id}">수정</button>${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`}${(!isStaff && r.phone && !USERS.some(u => u.phone === r.phone && !u.replacedBy)) ? `<button class="ghost sm" data-acct="${r.id}" title="고객이 링크로 확인할 수 있게 계정 만들기">계정</button>` : ""}${isStaff ? "" : `<button class="ghost sm" data-del="${r.id}" style="color:var(--danger)">삭제</button>`}</td></tr>`).join("")}
+      ${rows.length===0 ? `<tr><td colspan="${COLS.length+1}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
   const body = area;
   body.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; if(adminSort.key===k) adminSort.dir *= -1; else adminSort = {key:k, dir:1}; renderListTable(); });
   body.querySelectorAll("[data-paid]").forEach(c => c.onchange = async () => {
@@ -1118,21 +1136,22 @@ function orderFormModal(o){
   const isNew = !o; const slots = timeSlots(S);
   const qty = {}; (o && o.items || []).forEach(i => qty[i.id] = i.qty);
   const menu = MENU.filter(m => m.active !== false || qty[m.id]);
-  openModal(`<h3>${isNew ? "전화 예약 추가" : "예약 수정"}</h3>
-    <p class="hint" style="margin:0 0 4px">주문자명만 있으면 추가할 수 있고, 나머지는 나중에 '수정'으로 채워도 됩니다.</p>
-    <div class="row"><div style="flex:1"><label class="f">주문자명 <span style="color:var(--tc)">*</span></label><input id="fName" value="${esc(o?o.name:"")}"></div><div style="flex:1"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):"")}" placeholder="모르면 비워두세요"></div></div>
+  openModal(`<h3>${isNew ? "전화 예약 입력" : "예약 수정"}</h3>
+    <p class="hint" style="margin:0 0 4px">주문자명만 있으면 저장할 수 있고, 나머지는 나중에 '수정'으로 채워도 됩니다.</p>
+    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">주문자명 <span style="color:var(--tc)">*</span></label><input id="fName" value="${esc(o?o.name:"")}" placeholder="이름"></div><div style="flex:1;min-width:200px"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):"")}" placeholder="모르면 비워두세요"></div></div>
     <label class="f">예약 품목과 수량</label>
-    ${menu.map(m => `<div class="cline" style="padding:6px 0"><div class="n" style="font-size:14px">${esc(m.name)}<small>${won(m.price)}</small></div><div class="qty"><button type="button" data-qd="-1" data-for="${m.id}">−</button><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}" style="width:54px;padding:8px 4px;text-align:center;border:0;border-radius:0;font-weight:700"><button type="button" data-qd="1" data-for="${m.id}">+</button></div></div>`).join("")}
-    <div class="row between" style="margin-top:6px"><span>합계</span><b id="fTotal" style="color:var(--tc);font-size:17px">${won(o?o.total:0)}</b></div>
-    <div class="row"><div style="flex:1"><label class="f">픽업 날짜</label><select id="fDate"><option value="">미정</option>${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
-      <div style="flex:1"><label class="f">픽업 시간</label><select id="fTime"><option value="">미정</option>${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
-    <label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:"")}" placeholder="비우면 주문자명과 동일">
-    <label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":"")}">
+    <div class="qgrid">${menu.map(m => `<div class="qrow ${qty[m.id]?"on":""}" data-row="${m.id}"><div class="n">${esc(m.name)}<small>${won(m.price)}</small></div><div class="qty"><button type="button" data-qd="-1" data-for="${m.id}">−</button><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}"><button type="button" data-qd="1" data-for="${m.id}">+</button></div></div>`).join("")}</div>
+    <div class="row between" style="margin-top:10px;padding:10px 12px;background:#f6f1eb;border-radius:12px"><span style="font-size:16px">합계</span><b id="fTotal" style="color:var(--tc);font-size:24px">${won(o?o.total:0)}</b></div>
+    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">픽업 날짜</label><select id="fDate"><option value="">미정</option>${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
+      <div style="flex:1;min-width:200px"><label class="f">픽업 시간</label><select id="fTime"><option value="">미정</option>${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
+    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:"")}" placeholder="비우면 주문자명과 동일"></div><div style="flex:1;min-width:200px"><label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":"")}" placeholder="퀵 발송 등"></div></div>
     <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o&&o.paid?"checked":""}>입금 확인됨</label>
     ${isNew && !isStaff ? `<label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="fAcct" style="width:18px">고객 계정도 만들기 (핸드폰번호 + 임시 비밀번호 ${TEMP_PW}, 고객이 링크로 예약 확인 가능)</label>` : ""}
     <div class="err" id="fErr"></div>
-    <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "추가" : "저장"}</button></div>`);
-  const calc = () => { let t = 0; document.querySelectorAll("[data-q]").forEach(i => { const m = MENU.find(x => x.id===i.dataset.q); t += (Number(i.value)||0) * (Number(m.price)||0); }); $("#fTotal").textContent = won(t); return t; };
+    <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "예약 저장" : "저장"}</button></div>`);
+  document.querySelector("#modalRoot .modal").classList.add("wide");
+  const calc = () => { let t = 0; document.querySelectorAll("[data-q]").forEach(i => { const m = MENU.find(x => x.id===i.dataset.q); const q = Number(i.value)||0; t += q * (Number(m.price)||0); const row = i.closest(".qrow"); if(row) row.classList.toggle("on", q > 0); }); $("#fTotal").textContent = won(t); return t; };
+  setTimeout(() => { const n = $("#fName"); if(n && !n.value) n.focus(); }, 50);
   document.querySelectorAll("[data-q]").forEach(i => i.oninput = calc);
   document.querySelectorAll("[data-qd]").forEach(b => b.onclick = () => { const i = document.querySelector(`[data-q="${b.dataset.for}"]`); i.value = Math.max(0, (Number(i.value)||0) + Number(b.dataset.qd)); calc(); });
   $("#mCancel").onclick = closeModal;
