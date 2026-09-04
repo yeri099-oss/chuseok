@@ -705,7 +705,7 @@ function renderListTable(){
   const rc = $("#rowCount"); if(rc) rc.textContent = rows.length + "건";
   area.innerHTML = `<div class="tblwrap"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}">${l}${adminSort.key===k?`<span class="arr">${adminSort.dir>0?"▲":"▼"}</span>`:""}</th>`).join("")}<th>상태</th><th></th></tr></thead>
     <tbody>${rows.map(r => `<tr class="${r.status==="cancelled"?"cancelled":""} ${r.paid?"paid":""}">
-      <td class="nol">${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${esc(fmtPickDate(r.pickupDate))}</td><td>${esc(r.pickupTime)}</td><td>${esc(r.depositor)}</td>
+      <td class="nol">${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${r.pickupDate ? esc(fmtPickDate(r.pickupDate)) : `<span class="hint">미정</span>`}</td><td>${r.pickupTime ? esc(r.pickupTime) : `<span class="hint">미정</span>`}</td><td>${esc(r.depositor)}</td>
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:`<span class="pill wait">대기</span>`}</label>`}</td>
       <td>${fmtDT(r.createdAt)}</td><td style="white-space:pre-line;max-width:200px">${esc(r.memo||"")}</td>
       <td class="nol">${r.status==="cancelled"?`<span class="pill cancel">취소</span>`:r.paid?`<span class="pill ok">완료</span>`:`<span class="pill wait">입금대기</span>`}</td>
@@ -819,12 +819,13 @@ function orderFormModal(o){
   const qty = {}; (o && o.items || []).forEach(i => qty[i.id] = i.qty);
   const menu = MENU.filter(m => m.active !== false || qty[m.id]);
   openModal(`<h3>${isNew ? "전화 예약 추가" : "예약 수정"}</h3>
-    <div class="row"><div style="flex:1"><label class="f">주문자명</label><input id="fName" value="${esc(o?o.name:"")}"></div><div style="flex:1"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):"")}" placeholder="010-1234-5678"></div></div>
+    <p class="hint" style="margin:0 0 4px">주문자명만 있으면 추가할 수 있고, 나머지는 나중에 '수정'으로 채워도 됩니다.</p>
+    <div class="row"><div style="flex:1"><label class="f">주문자명 <span style="color:var(--tc)">*</span></label><input id="fName" value="${esc(o?o.name:"")}"></div><div style="flex:1"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):"")}" placeholder="모르면 비워두세요"></div></div>
     <label class="f">예약 품목과 수량</label>
     ${menu.map(m => `<div class="cline" style="padding:6px 0"><div class="n" style="font-size:14px">${esc(m.name)}<small>${won(m.price)}</small></div><div class="qty"><button type="button" data-qd="-1" data-for="${m.id}">−</button><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}" style="width:54px;padding:8px 4px;text-align:center;border:0;border-radius:0;font-weight:700"><button type="button" data-qd="1" data-for="${m.id}">+</button></div></div>`).join("")}
     <div class="row between" style="margin-top:6px"><span>합계</span><b id="fTotal" style="color:var(--tc);font-size:17px">${won(o?o.total:0)}</b></div>
-    <div class="row"><div style="flex:1"><label class="f">픽업 날짜</label><select id="fDate">${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
-      <div style="flex:1"><label class="f">픽업 시간</label><select id="fTime">${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
+    <div class="row"><div style="flex:1"><label class="f">픽업 날짜</label><select id="fDate"><option value="">미정</option>${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
+      <div style="flex:1"><label class="f">픽업 시간</label><select id="fTime"><option value="">미정</option>${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
     <label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:"")}" placeholder="비우면 주문자명과 동일">
     <label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":"")}">
     <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o&&o.paid?"checked":""}>입금 확인됨</label>
@@ -837,14 +838,14 @@ function orderFormModal(o){
   $("#mOk").onclick = async () => {
     const name = $("#fName").value.trim(); const phone = digits($("#fPhone").value);
     const items = []; document.querySelectorAll("[data-q]").forEach(i => { const q = Number(i.value)||0; if(q>0){ const m = MENU.find(x => x.id===i.dataset.q); items.push({ id:m.id, name:m.name, price:Number(m.price)||0, qty:q }); } });
-    const err = !name ? "주문자명을 입력해 주세요." : !/^0\d{8,10}$/.test(phone) ? "전화번호를 정확히 입력해 주세요." : !items.length ? "품목 수량을 1개 이상 입력해 주세요." : "";
+    const err = !name ? "주문자명을 입력해 주세요." : (phone && !/^0\d{8,10}$/.test(phone)) ? "전화번호가 이상합니다. 모르면 비워두세요." : "";
     if(err){ $("#fErr").textContent = err; return; }
     const paid = $("#fPaid").checked;
     const data = { name, phone, items, total: items.reduce((s,i)=>s+i.price*i.qty,0), qtyTotal: items.reduce((s,i)=>s+i.qty,0), pickupDate:$("#fDate").value, pickupTime:$("#fTime").value, depositor:($("#fDep").value.trim()||name), memo:$("#fMemo").value.trim(), paid, updatedAt:DB.ts() };
     try {
       if(isNew){
-        const u = USERS.find(x => x.phone === phone && !x.replacedBy);
-        Object.assign(data, { uid: u ? u.id : "phone:"+phone, source:"phone", status:"active", createdAt:DB.ts(), paidAt: paid ? DB.ts() : null, createdBy:"admin" });
+        const u = phone ? USERS.find(x => x.phone === phone && !x.replacedBy) : null;
+        Object.assign(data, { uid: u ? u.id : "phone:"+(phone || Date.now()), source:"phone", status:"active", createdAt:DB.ts(), paidAt: paid ? DB.ts() : null, createdBy:"admin" });
         const id = await DB.add(C.orders, data);
         await log("order_phone", `전화 예약 추가 ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime}${paid?" / 입금확인":""} (${id})`);
         toast("전화 예약이 추가되었습니다");
