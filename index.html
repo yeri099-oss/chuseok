@@ -868,9 +868,7 @@ function renderAdminSummary(body){
     <div class="kpis">
       <div class="kpi main"><div class="l">총 예약 금액</div><div class="v">${won(d.money.total)}</div><div class="s">예약 ${d.money.orders}건 · 총 수량 ${d.money.qty}개</div></div>
       <div class="kpi ok"><div class="l">입금 확인 금액</div><div class="v">${won(d.money.paid)}</div><div class="s">${d.money.paidOrders}건 · 전체의 ${d.money.total ? Math.round(d.money.paid/d.money.total*100) : 0}%</div><div class="bar"><i style="width:${d.money.total ? Math.round(d.money.paid/d.money.total*100) : 0}%"></i></div></div>
-      <div class="kpi claim"><div class="l">고객 입금표시 (확인 필요)</div><div class="v">${won(d.money.claim)}</div><div class="s">${d.money.claimOrders}건</div></div>
-      <div class="kpi wait"><div class="l">입금 대기 금액</div><div class="v">${won(d.money.wait)}</div><div class="s">${d.money.waitOrders}건</div></div>
-      <div class="kpi"><div class="l">총 수량</div><div class="v">${d.money.qty}<span style="font-size:14px;font-weight:500"> 개</span></div><div class="s">${d.names.length}개 품목</div></div>
+      <div class="kpi wait"><div class="l">입금 대기 금액</div><div class="v">${won(d.money.wait + d.money.claim)}</div><div class="s">${d.money.waitOrders + d.money.claimOrders}건${d.money.claimOrders ? ` (고객 입금표시 ${d.money.claimOrders}건 포함)` : ""}</div></div>
       <div class="kpi"><div class="l">예약 건수</div><div class="v">${d.money.orders}<span style="font-size:14px;font-weight:500"> 건</span></div><div class="s">취소 ${d.money.cancelled}건 · 회원 ${d.money.members}명</div></div>
     </div>
     <div class="card"><h3>품목별 매출</h3>
