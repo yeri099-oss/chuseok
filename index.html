@@ -207,7 +207,7 @@ const C = { users:"holidayApp_users", orders:"holidayApp_orders", menu:"holidayA
 const TEMP_PW = "123456";   // 관리자가 초기화할 때 쓰는 임시 비밀번호
 
 const DEFAULT_MENU = [
-  { id:"m1", sort:1, active:true, limit:100, name:"자연양돈 완자전 도시락", price:26000, desc:"35g 10개입 / 종이 도시락 포장\nNon GMO 사료로 키운 무항생제 자연양돈 돈육으로 지져낸 동그랑땡" },
+  { id:"m1", sort:1, active:true, name:"자연양돈 완자전 도시락", price:26000, desc:"35g 10개입 / 종이 도시락 포장\nNon GMO 사료로 키운 무항생제 자연양돈 돈육으로 지져낸 동그랑땡" },
   { id:"m2", sort:2, active:true, name:"달맞이 둥근 삼색 송편 1kg", price:22000, desc:"냉동 / 약 20g 50개 내외\n유기농멥쌀(국산), 참깨(국산), 대두(국산), 쑥가루(국산), 단호박가루(국산), 유기농설탕, 천일염(국산)" },
   { id:"m3", sort:3, active:true, name:"모싯잎 송편 1kg", price:28000, desc:"냉동 / 약 35g 29개 내외\n유기농멥쌀(국산), 녹두(국산), 모시잎(국산), 유기농설탕, 천일염(국산)" },
   { id:"m4", sort:4, active:true, name:"유기농 전통 식혜 1.5L", price:8900, desc:"냉동\n유기농쌀(국산), 유기농엿기름(국산), 유기농설탕, 유기농생강(국산)" },
@@ -1128,7 +1128,7 @@ function renderAdminMenu(body){
         <div class="row" style="margin-top:8px;flex-wrap:wrap"><label class="row" style="gap:4px;font-size:14px"><input type="checkbox" data-f="active" style="width:18px" ${m.active!==false?"checked":""}>판매</label><label class="row" style="gap:4px;font-size:14px">순서 <input data-f="sort" type="number" value="${m.sort||0}" style="width:70px"></label><div class="spacer"></div><button class="ghost sm danger" style="color:#fff" data-delm="${m.id}">삭제</button><button class="sm" data-save="${m.id}">저장</button></div></div>
     </div></div>`).join("")}
     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="ghost" id="addMenu">+ 품목 추가</button><button class="ghost" id="resetMenu">기본 5개 품목 불러오기</button><button class="ghost" id="recalcStock">예약 수량 다시 계산</button></div>
-    <p class="hint">한정 수량을 넣으면 고객 화면에 "남은 수량 n개"가 보이고, 다 차면 그 품목은 자동으로 품절 처리됩니다. 남은 수량이 맞지 않아 보이면 '예약 수량 다시 계산'을 누르세요.</p>`;
+    <p class="hint">판매 가능 수량을 비워두면 수량 제한 없이 계속 판매됩니다. 수량을 넣으면 고객 화면에 "남은 수량 n개"가 보이고, 다 차면 그 품목은 자동으로 품절 처리됩니다. 남은 수량이 맞지 않아 보이면 '예약 수량 다시 계산'을 누르세요.</p>`;
   const pending = {};
   body.querySelectorAll("[data-img]").forEach(inp => inp.onchange = async () => { const f = inp.files[0]; if(!f) return; try { pending[inp.dataset.img] = await resizeImage(f, 720, 0.82); toast("사진이 준비되었습니다. 저장을 눌러주세요"); inp.closest(".adm-item").querySelector("img, .noimg").outerHTML = `<img src="${pending[inp.dataset.img]}" alt="">`; } catch(e){ toast("사진을 읽을 수 없습니다"); } });
   body.querySelectorAll("[data-rmimg]").forEach(b => b.onclick = async () => { await DB.update(C.menu, b.dataset.rmimg, { image: null }); toast("사진 삭제"); });
