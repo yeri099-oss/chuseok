@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>꽃밥에피다 추석 명절음식 예약</title>
+<meta property="og:title" content="꽃밥에피다 2026 추석 명절음식 예약">
+<meta property="og:description" content="자연양돈 완자전 도시락 등 추석 명절음식 예약 접수 (100세트 한정)">
+<meta property="og:image" content="og.jpg">
+<link rel="icon" href="logo.png">
+<style>
+:root{
+  --tc:#b5533c; --tc-dark:#8f3f2d; --tc-light:#fbeee9;
+  --ink:#2b2622; --muted:#7a716a; --line:#e8e0d8; --bg:#faf6f1; --card:#fff;
+  --ok:#2f8f5b; --ok-light:#e6f4ec; --warn:#b3741f; --warn-light:#fff5e1; --danger:#c43c3c;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;font-size:15px;line-height:1.5}
+button{font-family:inherit;font-size:15px;cursor:pointer;border:0;border-radius:10px;padding:10px 16px;background:var(--tc);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:500}
+button.sm{padding:6px 10px;font-size:13px;border-radius:8px}
+button.danger{background:var(--danger)}
+button.ok{background:var(--ok)}
+input,select,textarea{font-family:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--tc);outline-offset:0;border-color:var(--tc)}
+textarea{min-height:90px;resize:vertical}
+label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-weight:600}
+.wrap{max-width:760px;margin:0 auto;padding:0 14px 90px}
+.wrap.wide{max-width:1200px}
+header.top{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line)}
+header.top .in{max-width:760px;margin:0 auto;padding:10px 14px;display:flex;align-items:center;gap:10px}
+header.top .in.wide{max-width:1200px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--tc);white-space:nowrap}
+.brand small{display:block;font-size:12px;color:var(--muted);font-weight:500;line-height:1.2}
+.spacer{flex:1}
+.who{font-size:13px;color:var(--muted);text-align:right;line-height:1.25}
+.who b{color:var(--ink)}
+nav.tabs{position:sticky;top:57px;z-index:19;background:#fff;border-bottom:1px solid var(--line)}
+nav.tabs .in{max-width:760px;margin:0 auto;display:flex}
+nav.tabs .in.wide{max-width:1200px}
+nav.tabs button{flex:1;background:none;color:var(--muted);border-radius:0;padding:12px 4px;font-weight:600;border-bottom:3px solid transparent;position:relative}
+nav.tabs button.on{color:var(--tc);border-bottom-color:var(--tc)}
+nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;background:var(--tc);color:#fff;font-size:11px;border-radius:10px;padding:0 6px;line-height:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
+.card h3{margin:0 0 8px;font-size:16px}
+.notice{background:var(--tc-light);border:1px solid #f0cfc4;border-radius:14px;padding:12px 14px;margin:12px 0;font-size:14px;white-space:pre-line}
+.notice b{color:var(--tc-dark)}
+.hint{font-size:13px;color:var(--muted)}
+.emph{background:var(--warn-light);border:1px solid #f1dcb0;color:#7a4e0c;border-radius:10px;padding:10px 12px;font-weight:600;font-size:14px;margin:8px 0}
+.menu{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+@media(min-width:600px){.menu{grid-template-columns:1fr 1fr}}
+.item{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.item .img{width:100%;aspect-ratio:4/3;background:#f1ebe4 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><circle cx='60' cy='60' r='40' fill='%23e7dcd2'/><text x='60' y='66' font-size='14' text-anchor='middle' fill='%23a3958a' font-family='sans-serif'>사진 준비중</text></svg>") center/120px no-repeat;object-fit:cover;display:block}
+.item .body{padding:12px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.item .name{font-weight:700;font-size:16px}
+.item .desc{font-size:13px;color:var(--muted);white-space:pre-line}
+.item .price{font-weight:700;color:var(--tc);font-size:17px}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.qty button{background:#fff;color:var(--ink);border-radius:0;padding:8px 14px;font-size:18px;font-weight:700;min-width:44px}
+.qty button:active{background:var(--tc-light)}
+.qty span{min-width:40px;text-align:center;font-weight:700;font-size:16px}
+.row{display:flex;align-items:center;gap:10px}
+.row.between{justify-content:space-between}
+.sum{font-weight:700;font-size:18px}
+.sum small{font-weight:500;color:var(--muted);font-size:13px}
+.cartbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);z-index:18;box-shadow:0 -4px 16px rgba(0,0,0,.06)}
+.cartbar .in{max-width:760px;margin:0 auto;padding:10px 14px;display:flex;align-items:center;gap:12px}
+.cline{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.cline:last-child{border-bottom:0}
+.cline .n{flex:1}
+.cline .n small{display:block;color:var(--muted);font-size:12px}
+.cline .p{font-weight:700;min-width:80px;text-align:right}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:8px 14px;font-weight:600}
+.chip.on{background:var(--tc);color:#fff;border-color:var(--tc)}
+.acct{background:#fff;border:2px dashed var(--tc);border-radius:12px;padding:12px;text-align:center;margin:10px 0}
+.acct .num{font-size:22px;font-weight:800;letter-spacing:1px;color:var(--tc-dark);margin:4px 0}
+.status-ok{background:var(--ok-light);color:var(--ok);border-radius:12px;padding:14px;text-align:center;font-weight:800;font-size:18px}
+.status-wait{background:var(--warn-light);color:#7a4e0c;border-radius:12px;padding:14px;text-align:center;font-weight:800;font-size:17px}
+.status-cancel{background:#eee;color:#666;border-radius:12px;padding:12px;text-align:center;font-weight:700}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
+.pill.ok{background:var(--ok-light);color:var(--ok)}
+.pill.wait{background:var(--warn-light);color:#7a4e0c}
+.pill.cancel{background:#eee;color:#777}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:420px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:90vh;overflow:auto}
+.modal h3{margin:0 0 10px;font-size:18px;color:var(--tc-dark)}
+.modal .btns{display:flex;gap:8px;margin-top:14px}
+.modal .btns button{flex:1}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#2b2622;color:#fff;padding:10px 18px;border-radius:999px;z-index:60;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+.auth{max-width:420px;margin:30px auto;padding:0 14px}
+.auth .logo{text-align:center;margin-bottom:14px}
+.auth .logo h1{margin:6px 0 0;font-size:22px;color:var(--tc)}
+.auth .logo p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.auth .card{padding:20px}
+.auth button.main{width:100%;padding:13px;font-size:16px;margin-top:14px}
+.link{background:none;color:var(--tc);padding:4px;font-weight:600;text-decoration:underline}
+.err{color:var(--danger);font-size:13px;margin-top:8px;min-height:18px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:6px}
+.seg button{flex:1;background:#fff;color:var(--muted);border-radius:0;padding:10px}
+.seg button.on{background:var(--tc);color:#fff}
+/* admin */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.toolbar input{max-width:320px}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px}
+.stat b{font-size:16px;color:var(--tc-dark);margin-left:4px}
+.tblwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:900px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+th{background:#f6f1eb;position:sticky;top:0;cursor:pointer;user-select:none;font-weight:700}
+th .arr{color:var(--tc);margin-left:4px}
+td.items{white-space:pre-line;min-width:180px}
+tr.cancelled td{color:#999;text-decoration:line-through}
+tr.cancelled td.nol{text-decoration:none}
+td .chk{width:20px;height:20px;cursor:pointer}
+tr.paid td{background:#f4fbf6}
+.adm-item{display:grid;grid-template-columns:120px 1fr;gap:12px}
+.adm-item img,.adm-item .noimg{width:120px;height:90px;object-fit:cover;border-radius:10px;background:#f1ebe4;display:block}
+.adm-item .noimg{display:flex;align-items:center;justify-content:center;color:#aaa;font-size:12px}
+@media(max-width:600px){.adm-item{grid-template-columns:1fr}}
+.log{font-size:13px;padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}
+.log .t{color:var(--muted);min-width:118px}
+.log .ty{font-weight:700;min-width:70px}
+.loading{text-align:center;color:var(--muted);padding:60px 0}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">불러오는 중…</div></div>
+<div id="toast" class="toast"></div>
+<div id="modalRoot"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ===================== 설정 ===================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCIvN2Y1a9ByNmz4UpgdmaTFrd5SAYZZGY",
+  authDomain: "trip-84bd3.firebaseapp.com",
+  projectId: "trip-84bd3",
+  storageBucket: "trip-84bd3.firebasestorage.app",
+  messagingSenderId: "830387988854",
+  appId: "1:830387988854:web:85d1c46b3f4f374214b257"
+};
+const APP_NAME = "chuseokOrder";              // 다른 앱 탭과 로그인 저장소 분리
+const EMAIL_DOMAIN = "chuseok.goodbab.app";   // 전화번호 → 로그인용 이메일 변환
+const ADMIN_ID = "goodbab";
+const ADMIN_EMAIL = ADMIN_ID + "@" + EMAIL_DOMAIN;
+const C = { users:"holidayApp_users", orders:"holidayApp_orders", menu:"holidayApp_menu", meta:"holidayApp_meta", logs:"holidayApp_logs" };
+
+const DEFAULT_MENU = [
+  { id:"m1", sort:1, active:true, name:"자연양돈 완자전 도시락", price:26000, desc:"35g 10개입 / 종이 도시락 포장\nNon GMO 사료로 키운 무항생제 자연양돈 돈육으로 지져낸 동그랑땡" },
+  { id:"m2", sort:2, active:true, name:"달맞이 둥근 삼색 송편 1kg", price:22000, desc:"냉동 / 약 20g 50개 내외\n유기농멥쌀(국산), 참깨(국산), 대두(국산), 쑥가루(국산), 단호박가루(국산), 유기농설탕, 천일염(국산)" },
+  { id:"m3", sort:3, active:true, name:"모싯잎 송편 1kg", price:28000, desc:"냉동 / 약 35g 29개 내외\n유기농멥쌀(국산), 녹두(국산), 모시잎(국산), 유기농설탕, 천일염(국산)" },
+  { id:"m4", sort:4, active:true, name:"유기농 전통 식혜 1.5L", price:8900, desc:"냉동\n유기농쌀(국산), 유기농엿기름(국산), 유기농설탕, 유기농생강(국산)" },
+  { id:"m5", sort:5, active:true, name:"유기농 단호박 식혜 1.5L", price:9700, desc:"냉동\n유기농단호박(국산), 유기농쌀(국산), 유기농엿기름(국산), 유기농설탕, 유기농생강(국산)" }
+];
+const DEFAULT_SETTINGS = {
+  bank:"기업은행", account:"02409732104031", holder:"꽃밥이야기",
+  deadline:"2026-09-20T20:00", orderOpen:true,
+  pickupDates:["2026-09-23","2026-09-24"], timeStart:12, timeEnd:19,
+  limitNote:"100세트 한정 선착순 마감 (예약 수량 외 추가 구입 불가)",
+  phone:"02-3676-6262 / 02-766-6272",
+  notice:"안녕하세요, 꽃밥지기 송정은입니다.\n올해는 내부 사정으로 명절음식 전체 준비는 쉬어가고, 가장 사랑받는 자연양돈 완자전(동그랑땡)과 송편, 식혜만 준비합니다. 실망스러우시더라도 이해 부탁드려요.\n\n예약 접수: 9월 7일(월) ~ 9월 20일(일) 저녁 8시\n100세트 한정 선착순 마감 (올해는 예약 수량 외 추가 구입이 어려우니 꼭 필요하신 수량을 점검해 주세요)\n픽업: 9월 23일(수), 24일(목) 오후 12시 ~ 7시\n택배 불가, 퀵 발송 가능 (퀵비용 별도)\n문의: 02-3676-6262 / 02-766-6272",
+  materials:"Non GMO 사료로 키운 무항생제 자연양돈 돈육\n무농약 채소\n무항생제 동물복지 유정란\n무농약 우리밀 / 무농약콩 두부\n국내산 참기름, 들기름\n국내산콩 전통발효간장 / 태안자염\n마스코바도 유기농설탕\n네니아 Non GMO 냉압착 유채유"
+};
+
+/* ===================== 데이터 계층 (Firebase / 데모) ===================== */
+const DEMO = (location.protocol === "file:" || location.search.includes("demo=1"));
+let DB;
+if (!DEMO) {
+  const app = firebase.initializeApp(FIREBASE_CONFIG, APP_NAME);
+  const auth = firebase.auth(app);
+  const fs = firebase.firestore(app);
+  const conv = d => ({ id:d.id, ...d.data() });
+  DB = {
+    onAuth: cb => auth.onAuthStateChanged(u => cb(u ? { uid:u.uid, email:u.email, displayName:u.displayName } : null)),
+    signUp: async (email,pw,name) => { const r = await auth.createUserWithEmailAndPassword(email,pw); if(name) await r.user.updateProfile({displayName:name}); return { uid:r.user.uid, email }; },
+    signIn: async (email,pw) => { const r = await auth.signInWithEmailAndPassword(email,pw); return { uid:r.user.uid, email }; },
+    signOut: () => auth.signOut(),
+    ts: () => firebase.firestore.FieldValue.serverTimestamp(),
+    get: async (col,id) => { const d = await fs.collection(col).doc(id).get(); return d.exists ? conv(d) : null; },
+    set: (col,id,data,merge) => fs.collection(col).doc(id).set(data,{merge:!!merge}),
+    update: (col,id,data) => fs.collection(col).doc(id).update(data),
+    del: (col,id) => fs.collection(col).doc(id).delete(),
+    add: async (col,data) => (await fs.collection(col).add(data)).id,
+    getAll: async (col,filter) => { let q = fs.collection(col); if(filter) q = q.where(filter.field,filter.op,filter.value); const s = await q.get(); return s.docs.map(conv); },
+    listen: (col,filter,cb,err) => { let q = fs.collection(col); if(filter) q = q.where(filter.field,filter.op,filter.value); return q.onSnapshot(s => cb(s.docs.map(conv)), e => { console.error(e); err && err(e); }); }
+  };
+} else {
+  // 데모 모드: 브라우저 메모리에만 저장 (file://로 열었을 때)
+  const store = {}; const users = {}; let cur = null; const authCbs = []; const listeners = [];
+  const col = c => (store[c] = store[c] || {});
+  const fire = c => listeners.filter(l => l.col===c).forEach(l => l.cb(match(c,l.filter)));
+  const match = (c,f) => Object.entries(col(c)).map(([id,d]) => ({id,...clone(d)})).filter(d => !f || d[f.field]===f.value);
+  const clone = o => JSON.parse(JSON.stringify(o), (k,v) => (v && v.__ts) ? new Date(v.__ts) : v);
+  const emitAuth = () => authCbs.forEach(cb => cb(cur));
+  DB = {
+    onAuth: cb => { authCbs.push(cb); setTimeout(() => cb(cur), 0); },
+    signUp: async (email,pw,name) => { if(users[email]) throw {code:"auth/email-already-in-use"}; if(pw.length<6) throw {code:"auth/weak-password"}; users[email] = {pw, uid:"u_"+Math.random().toString(36).slice(2,9), displayName:name}; cur = {uid:users[email].uid,email,displayName:name}; emitAuth(); return cur; },
+    signIn: async (email,pw) => { const u = users[email]; if(!u) throw {code:"auth/user-not-found"}; if(u.pw!==pw) throw {code:"auth/wrong-password"}; cur = {uid:u.uid,email,displayName:u.displayName}; emitAuth(); return cur; },
+    signOut: async () => { cur = null; emitAuth(); },
+    ts: () => ({__ts: Date.now()}),
+    get: async (c,id) => col(c)[id] ? {id,...clone(col(c)[id])} : null,
+    set: async (c,id,data,merge) => { col(c)[id] = merge ? {...(col(c)[id]||{}),...clone(data)} : clone(data); fire(c); },
+    update: async (c,id,data) => { if(!col(c)[id]) throw new Error("no doc"); Object.assign(col(c)[id], clone(data)); fire(c); },
+    del: async (c,id) => { delete col(c)[id]; fire(c); },
+    add: async (c,data) => { const id = "d_"+Math.random().toString(36).slice(2,10); col(c)[id] = clone(data); fire(c); return id; },
+    getAll: async (c,f) => match(c,f),
+    listen: (c,f,cb) => { const l = {col:c,filter:f,cb}; listeners.push(l); setTimeout(() => cb(match(c,f)),0); return () => { const i = listeners.indexOf(l); if(i>=0) listeners.splice(i,1); }; }
+  };
+  window.__DEMO_DB = { store, users };
+}
+
+/* ===================== 유틸 ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const won = n => (Number(n)||0).toLocaleString("ko-KR") + "원";
+const digits = s => String(s||"").replace(/\D/g,"");
+const fmtPhone = p => { p = digits(p); if(p.length===11) return p.replace(/(\d{3})(\d{4})(\d{4})/,"$1-$2-$3"); if(p.length===10) return p.replace(/(\d{2,3})(\d{3,4})(\d{4})/,"$1-$2-$3"); return p; };
+const toDate = v => { if(!v) return null; if(v.toDate) return v.toDate(); if(v instanceof Date) return v; if(typeof v==="number"||typeof v==="string") return new Date(v); return null; };
+const fmtDT = v => { const d = toDate(v); if(!d) return ""; const z = n => String(n).padStart(2,"0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+const DAYS = ["일","월","화","수","목","금","토"];
+const fmtPickDate = s => { if(!s) return ""; const d = new Date(s+"T00:00:00"); if(isNaN(d)) return s; return `${d.getMonth()+1}월 ${d.getDate()}일(${DAYS[d.getDay()]})`; };
+const timeSlots = st => { const a = []; for(let h = Number(st.timeStart); h < Number(st.timeEnd); h++) a.push(`${h}시~${h+1}시`); return a; };
+const phoneToEmail = p => digits(p) + "@" + EMAIL_DOMAIN;
+let toastT; const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); };
+async function copyText(t){ try { await navigator.clipboard.writeText(t); return true; } catch(e){ const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok = document.execCommand("copy"); }catch(_){} ta.remove(); return ok; } }
+const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 가입된 번호입니다. 로그인해 주세요."; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "번호 또는 비밀번호가 맞지 않습니다. 아직 가입 전이라면 회원가입을 눌러주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요)"; return "오류: " + ((e && (e.message||e.code)) || e); };
+
+/* ===================== 모달 ===================== */
+function openModal(html, opts={}){
+  const root = $("#modalRoot");
+  root.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog">${html}</div></div>`;
+  if(opts.onOpen) opts.onOpen(root);
+  return root;
+}
+function closeModal(){ $("#modalRoot").innerHTML = ""; }
+function confirmModal(title, body, okLabel="확인", danger=false){
+  return new Promise(res => {
+    openModal(`<h3>${esc(title)}</h3><div>${body}</div><div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk" class="${danger?'danger':''}">${esc(okLabel)}</button></div>`);
+    $("#mCancel").onclick = () => { closeModal(); res(false); };
+    $("#mOk").onclick = () => { closeModal(); res(true); };
+  });
+}
+function accountModal(total, depositor){
+  openModal(`<h3>입금 계좌 안내</h3>
+    <div class="acct"><div>${esc(S.bank)}</div><div class="num" id="acctNum">${esc(S.account)}</div><div>예금주: ${esc(S.holder)}</div></div>
+    ${total ? `<div class="row between" style="margin:6px 0"><span>입금하실 금액</span><b style="font-size:18px;color:var(--tc)">${won(total)}</b></div>` : ""}
+    ${depositor ? `<div class="row between" style="margin:6px 0"><span>입금자명</span><b>${esc(depositor)}</b></div>` : ""}
+    <div class="emph">입금자명은 예약 시 적어주신 이름과 똑같이 입력해 주세요. 입금자명이 다르면 확인이 늦어질 수 있습니다.</div>
+    <div class="btns"><button class="ghost" id="mClose">닫기</button><button id="mCopy">계좌 복사하기</button></div>`);
+  $("#mClose").onclick = closeModal;
+  $("#mCopy").onclick = async () => { const ok = await copyText(S.account); toast(ok ? "계좌번호가 복사되었습니다" : "복사에 실패했습니다. 번호를 직접 입력해 주세요"); };
+}
+
+/* ===================== 상태 ===================== */
+let user = null;          // {uid,email,displayName}
+let profile = null;       // holidayApp_users 문서
+let isAdmin = false;
+let S = {...DEFAULT_SETTINGS};   // 설정
+let MENU = [];            // 품목
+let ORDERS = [];          // 내 주문 또는(관리자) 전체 주문
+let LOGS = [];
+let USERS = [];
+let cart = {};            // {menuId: qty}
+let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"" };
+let tab = "order";
+let unsubs = [];
+let authMode = "login";   // login | signup | admin
+let adminSort = { key:"createdAt", dir:-1 };
+let adminQ = ""; let showCancelled = false; let logQ = "";
+let pendingSignup = null;
+
+function log(type, detail){
+  const d = { type, uid: user ? user.uid : null, name: isAdmin ? "관리자" : (profile ? profile.name : (pendingSignup?pendingSignup.name:"")), phone: profile ? profile.phone : (pendingSignup?pendingSignup.phone:""), detail: detail||"", at: DB.ts() };
+  return DB.add(C.logs, d).catch(e => console.warn("log fail", e));
+}
+function saveCartLocal(){ try{ if(user) localStorage.setItem("chuseokCart_"+user.uid, JSON.stringify({cart, cartForm})); }catch(e){} }
+function loadCartLocal(){ try{ const v = JSON.parse(localStorage.getItem("chuseokCart_"+user.uid)||"null"); if(v){ cart = v.cart||{}; cartForm = {...cartForm, ...(v.cartForm||{})}; } }catch(e){} }
+const cartItems = () => MENU.filter(m => cart[m.id] > 0).map(m => ({ id:m.id, name:m.name, price:Number(m.price)||0, qty:cart[m.id] }));
+const cartTotal = () => cartItems().reduce((s,i) => s + i.price*i.qty, 0);
+const cartQty = () => cartItems().reduce((s,i) => s + i.qty, 0);
+const orderClosed = () => { if(S.orderOpen === false) return true; if(S.deadline){ const d = new Date(S.deadline); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
+
+/* ===================== 인증 흐름 ===================== */
+DB.onAuth(async u => {
+  unsubs.forEach(f => f()); unsubs = [];
+  user = u; profile = null; isAdmin = false; ORDERS = []; LOGS = []; USERS = [];
+  if(!u){ render(); return; }
+  isAdmin = (u.email === ADMIN_EMAIL);
+  try {
+    if(isAdmin){
+      profile = { name:"관리자" };
+      await ensureAdminSeed();
+      unsubs.push(DB.listen(C.orders, null, d => { ORDERS = d; render(); }, e => toast(authMsg(e))));
+      unsubs.push(DB.listen(C.logs, null, d => { LOGS = d; if(tab==="log") render(); }));
+      unsubs.push(DB.listen(C.users, null, d => { USERS = d; }));
+      tab = "list";
+    } else {
+      profile = await DB.get(C.users, u.uid);
+      if(!profile){
+        // 가입 직후 프로필이 없으면 만들어 둠
+        const p = pendingSignup && pendingSignup.email===u.email ? pendingSignup : null;
+        profile = { name: p ? p.name : (u.displayName||""), phone: p ? p.phone : digits(u.email.split("@")[0]), createdAt: DB.ts(), lastLoginAt: DB.ts() };
+        await DB.set(C.users, u.uid, profile);
+        if(p){ await log("signup", "회원가입"); pendingSignup = null; }
+      } else {
+        DB.update(C.users, u.uid, { lastLoginAt: DB.ts() }).catch(()=>{});
+        await log("login", "로그인");
+      }
+      loadCartLocal();
+      unsubs.push(DB.listen(C.orders, {field:"uid",op:"==",value:u.uid}, d => { ORDERS = d; render(); }, e => toast(authMsg(e))));
+      tab = "order";
+    }
+    unsubs.push(DB.listen(C.menu, null, d => { MENU = d.sort((a,b)=>(a.sort||0)-(b.sort||0)); render(); }, e => toast(authMsg(e))));
+    unsubs.push(DB.listen(C.meta, null, d => { const s = d.find(x => x.id==="settings"); S = s ? {...DEFAULT_SETTINGS, ...s} : {...DEFAULT_SETTINGS}; render(); }));
+  } catch(e){ console.error(e); toast(authMsg(e)); }
+  render();
+});
+async function ensureAdminSeed(){
+  const menu = await DB.getAll(C.menu);
+  if(menu.length === 0){ for(const m of DEFAULT_MENU){ const {id,...rest} = m; await DB.set(C.menu, id, rest); } }
+  const s = await DB.get(C.meta, "settings");
+  if(!s) await DB.set(C.meta, "settings", {...DEFAULT_SETTINGS, updatedAt: DB.ts()});
+}
+
+async function doSignup(name, phone, pw){
+  name = name.trim(); const p = digits(phone);
+  if(!name) throw "성명을 입력해 주세요.";
+  if(!/^01\d{8,9}$/.test(p)) throw "핸드폰번호를 정확히 입력해 주세요. (예: 010-1234-5678)";
+  if(pw.length < 6) throw "비밀번호는 6자리 이상으로 정해 주세요.";
+  pendingSignup = { name, phone:p, email: phoneToEmail(p) };
+  await DB.signUp(pendingSignup.email, pw, name);
+}
+async function doLogin(phone, pw){
+  const p = digits(phone);
+  if(!/^01\d{8,9}$/.test(p)) throw "핸드폰번호를 정확히 입력해 주세요.";
+  if(!pw) throw "비밀번호를 입력해 주세요.";
+  await DB.signIn(phoneToEmail(p), pw);
+}
+async function doAdminLogin(id, pw){
+  if(id.trim() !== ADMIN_ID) throw "관리자 아이디가 맞지 않습니다.";
+  if(!pw) throw "비밀번호를 입력해 주세요.";
+  try { await DB.signIn(ADMIN_EMAIL, pw); }
+  catch(e){
+    const c = e.code||"";
+    if(c.includes("user-not-found") || c.includes("invalid-credential") || c.includes("invalid-login")){
+      // 최초 1회: 관리자 계정이 아직 없으면 지금 입력한 비밀번호로 생성
+      try { await DB.signUp(ADMIN_EMAIL, pw, "관리자"); toast("관리자 계정을 처음 만들었습니다"); }
+      catch(e2){ if((e2.code||"").includes("email-already-in-use")) throw "관리자 비밀번호가 맞지 않습니다."; throw e2; }
+    } else if(c.includes("wrong-password")) throw "관리자 비밀번호가 맞지 않습니다.";
+    else throw e;
+  }
+  setTimeout(() => log("admin_login", "관리자 로그인"), 500);
+}
+
+/* ===================== 렌더 ===================== */
+function render(){
+  const app = $("#app");
+  if(user === undefined) return;
+  if(!user){ renderAuth(app); return; }
+  if(!profile){ app.innerHTML = `<div class="loading">불러오는 중…</div>`; return; }
+  isAdmin ? renderAdmin(app) : renderCustomer(app);
+}
+
+function renderAuth(app){
+  const m = authMode;
+  app.innerHTML = `<div class="auth">
+    <div class="logo"><div style="font-size:34px">🌕</div><h1>꽃밥에피다</h1><p>2026 추석 명절음식 예약</p></div>
+    <div class="card">
+      ${m!=="admin" ? `<div class="seg"><button class="${m==="login"?"on":""}" data-m="login">로그인</button><button class="${m==="signup"?"on":""}" data-m="signup">회원가입</button></div>` : `<h3 style="margin:0 0 6px">관리자 로그인</h3>`}
+      <form id="authForm" autocomplete="on">
+        ${m==="signup" ? `<label class="f">성명</label><input id="aName" placeholder="주문하시는 분 성함" autocomplete="name">` : ""}
+        ${m==="admin" ? `<label class="f">관리자 아이디</label><input id="aId" autocomplete="username">` : `<label class="f">핸드폰번호</label><input id="aPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="tel">`}
+        <label class="f">비밀번호 ${m==="signup" ? "<span style='font-weight:400'>(6자리 이상)</span>" : ""}</label><input id="aPw" type="password" autocomplete="${m==="signup"?"new-password":"current-password"}">
+        ${m==="signup" ? `<p class="hint" style="margin:8px 0 0">가입하신 핸드폰번호와 비밀번호로 다시 로그인하실 수 있습니다. 예약 확인을 위해 실제 사용하시는 번호를 입력해 주세요.</p>` : ""}
+        <div class="err" id="aErr"></div>
+        <button class="main" type="submit" id="aBtn">${m==="signup" ? "가입하고 시작하기" : "로그인"}</button>
+      </form>
+      <div style="text-align:center;margin-top:12px">
+        ${m==="admin" ? `<button class="link" data-m="login">고객 로그인으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
+      </div>
+    </div>
+    <p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p>
+  </div>`;
+  app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { authMode = b.dataset.m; render(); });
+  $("#authForm").onsubmit = async ev => {
+    ev.preventDefault(); const btn = $("#aBtn"); btn.disabled = true; $("#aErr").textContent = "";
+    try {
+      if(m==="signup") await doSignup($("#aName").value, $("#aPhone").value, $("#aPw").value);
+      else if(m==="admin") await doAdminLogin($("#aId").value, $("#aPw").value);
+      else await doLogin($("#aPhone").value, $("#aPw").value);
+    } catch(e){ $("#aErr").textContent = typeof e === "string" ? e : authMsg(e); btn.disabled = false; }
+  };
+}
+
+/* ---------- 고객 화면 ---------- */
+function header(wide){
+  return `<header class="top"><div class="in ${wide?"wide":""}">
+    <div class="brand"><span style="font-size:22px">🌕</span><div>꽃밥에피다<small>2026 추석 명절음식 예약${isAdmin?" · 관리자":""}</small></div></div>
+    <div class="spacer"></div>
+    <div class="who"><b>${esc(profile.name||"")}</b>${profile.phone?"<br>"+esc(fmtPhone(profile.phone)):""}</div>
+    <button class="ghost sm" id="logoutBtn">로그아웃</button>
+  </div></header>`;
+}
+function bindHeader(){ $("#logoutBtn").onclick = async () => { if(await confirmModal("로그아웃", "로그아웃 하시겠습니까?")) { saveCartLocal(); authMode="login"; await DB.signOut(); } }; }
+
+function renderCustomer(app){
+  const tabs = [["order","주문"],["cart","장바구니"],["done","예약완료"]];
+  const q = cartQty();
+  const active = ORDERS.filter(o => o.status !== "cancelled").length;
+  app.innerHTML = header(false) + `<nav class="tabs"><div class="in">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}${k==="cart"&&q?`<span class="badge">${q}</span>`:""}${k==="done"&&active?`<span class="badge">${active}</span>`:""}</button>`).join("")}</div></nav>
+    <div class="wrap" id="body"></div>`;
+  bindHeader();
+  app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
+  const body = $("#body");
+  if(tab==="order") renderOrderTab(body);
+  else if(tab==="cart") renderCartTab(body);
+  else renderDoneTab(body);
+}
+
+function renderOrderTab(body){
+  const closed = orderClosed();
+  body.innerHTML = `
+    <div class="notice"><b>꽃밥에피다 2026 추석 명절음식 안내</b>\n${esc(S.notice)}</div>
+    ${closed ? `<div class="emph">예약 접수가 마감되었습니다. 문의: ${esc(S.phone)}</div>` : `<div class="emph">${esc(S.limitNote)}</div>`}
+    <div class="menu">${MENU.filter(m => m.active !== false).map(m => `<div class="item">
+      ${m.image ? `<img class="img" src="${m.image}" alt="">` : `<div class="img"></div>`}
+      <div class="body"><div class="name">${esc(m.name)}</div><div class="desc">${esc(m.desc||"")}</div>
+        <div class="row between" style="margin-top:auto"><div class="price">${won(m.price)}</div>
+          <div class="qty"><button data-d="-1" data-id="${m.id}" ${closed?"disabled":""}>−</button><span id="q_${m.id}">${cart[m.id]||0}</span><button data-d="1" data-id="${m.id}" ${closed?"disabled":""}>+</button></div></div>
+        ${cart[m.id]>0 ? `<div class="hint" style="text-align:right">${cart[m.id]}개 = <b>${won(cart[m.id]*m.price)}</b></div>` : ""}
+      </div></div>`).join("")}
+      ${MENU.length===0 ? `<div class="card hint">등록된 품목이 없습니다.</div>` : ""}
+    </div>
+    <div class="card"><h3>꽃밥에서 사용하는 재료들</h3><div class="hint" style="white-space:pre-line">${esc(S.materials||"")}</div></div>
+    <div class="cartbar"><div class="in"><div class="sum">${won(cartTotal())}<br><small>${cartQty()}개 선택</small></div><div class="spacer"></div><button id="goCart" ${cartQty()?"":"disabled"}>장바구니 보기 →</button></div></div>`;
+  body.querySelectorAll(".qty button").forEach(b => b.onclick = () => { const id = b.dataset.id; cart[id] = Math.max(0, (cart[id]||0) + Number(b.dataset.d)); if(!cart[id]) delete cart[id]; saveCartLocal(); render(); });
+  $("#goCart").onclick = () => { tab = "cart"; render(); window.scrollTo(0,0); };
+}
+
+function renderCartTab(body){
+  const items = cartItems(); const total = cartTotal(); const closed = orderClosed();
+  if(!cartForm.depositor && profile.name) cartForm.depositor = profile.name;
+  const slots = timeSlots(S);
+  body.innerHTML = `
+    <div class="card"><h3>담은 품목</h3>
+      ${items.length ? items.map(i => `<div class="cline"><div class="n">${esc(i.name)}<small>${won(i.price)} × ${i.qty}</small></div>
+        <div class="qty"><button data-d="-1" data-id="${i.id}">−</button><span>${i.qty}</span><button data-d="1" data-id="${i.id}">+</button></div>
+        <div class="p">${won(i.price*i.qty)}</div></div>`).join("") : `<p class="hint">담긴 품목이 없습니다. 주문 탭에서 품목을 담아주세요.</p>`}
+      <div class="row between" style="margin-top:10px;padding-top:10px;border-top:2px solid var(--ink)"><span>합계 (${cartQty()}개)</span><span class="sum" style="color:var(--tc)">${won(total)}</span></div>
+    </div>
+    <div class="card"><h3>픽업 날짜와 시간</h3>
+      <div class="emph">픽업날짜와 시간대를 알려주세요. 가지러 오시는날 만듭니다</div>
+      <label class="f">픽업 날짜</label>
+      <div class="chips" id="dateChips">${(S.pickupDates||[]).map(d => `<button class="chip ${cartForm.pickupDate===d?"on":""}" data-d="${d}">${fmtPickDate(d)}</button>`).join("")}</div>
+      <label class="f">픽업 시간대 (오후 ${S.timeStart}시 ~ ${S.timeEnd}시)</label>
+      <div class="chips" id="timeChips">${slots.map(t => `<button class="chip ${cartForm.pickupTime===t?"on":""}" data-t="${t}">${t}</button>`).join("")}</div>
+      <p class="hint" style="margin:8px 0 0">택배는 불가하며 퀵 발송은 가능합니다 (퀵비용 별도). 퀵 발송을 원하시면 아래 요청사항에 적어주세요.</p>
+    </div>
+    <div class="card"><h3>입금 안내</h3>
+      <div class="emph">입금하실 때 <u>입금자명</u>을 아래에 적으신 이름과 똑같이 입력해 주세요. 입금자명이 다르면 입금 확인이 늦어질 수 있습니다.</div>
+      <label class="f">입금자명 (입금하실 때 쓰실 이름)</label>
+      <input id="depositor" value="${esc(cartForm.depositor)}" placeholder="예: 홍길동">
+      <label class="f">요청사항 (선택)</label>
+      <input id="memo" value="${esc(cartForm.memo)}" placeholder="퀵 발송 희망, 기타 요청">
+      <div style="margin-top:12px"><button class="ghost" id="acctBtn" style="width:100%;border-color:var(--tc);color:var(--tc)">입금계좌 확인하기</button></div>
+    </div>
+    ${closed ? `<div class="emph">예약 접수가 마감되었습니다.</div>` : ""}
+    <button id="submitBtn" style="width:100%;padding:14px;font-size:17px" ${(!items.length||closed)?"disabled":""}>예약 신청하기 (${won(total)})</button>
+    <p class="hint" style="text-align:center">예약 신청 후 입금해 주시면 확인 후 예약이 완료됩니다.</p>`;
+  body.querySelectorAll(".qty button").forEach(b => b.onclick = () => { const id = b.dataset.id; cart[id] = Math.max(0,(cart[id]||0)+Number(b.dataset.d)); if(!cart[id]) delete cart[id]; saveCartLocal(); render(); });
+  body.querySelectorAll("#dateChips .chip").forEach(b => b.onclick = () => { cartForm.pickupDate = b.dataset.d; saveCartLocal(); render(); });
+  body.querySelectorAll("#timeChips .chip").forEach(b => b.onclick = () => { cartForm.pickupTime = b.dataset.t; saveCartLocal(); render(); });
+  $("#depositor").oninput = e => { cartForm.depositor = e.target.value; saveCartLocal(); };
+  $("#memo").oninput = e => { cartForm.memo = e.target.value; saveCartLocal(); };
+  $("#acctBtn").onclick = () => accountModal(total, cartForm.depositor.trim());
+  $("#submitBtn").onclick = submitOrder;
+}
+
+async function submitOrder(){
+  const items = cartItems(); const total = cartTotal();
+  if(!items.length) return toast("담긴 품목이 없습니다");
+  if(!cartForm.pickupDate) return toast("픽업 날짜를 선택해 주세요");
+  if(!cartForm.pickupTime) return toast("픽업 시간대를 선택해 주세요");
+  const dep = cartForm.depositor.trim(); if(!dep) return toast("입금자명을 입력해 주세요");
+  if(orderClosed()) return toast("예약 접수가 마감되었습니다");
+  const ok = await confirmModal("예약 신청", `<div style="font-size:14px">${items.map(i => `${esc(i.name)} × ${i.qty}`).join("<br>")}<hr style="border:0;border-top:1px solid var(--line)">
+    합계 <b>${won(total)}</b><br>픽업 <b>${esc(fmtPickDate(cartForm.pickupDate))} ${esc(cartForm.pickupTime)}</b><br>입금자명 <b>${esc(dep)}</b></div>
+    <div class="emph" style="margin-top:10px">신청 후 위 금액을 입금해 주세요. 입금 확인 후 예약이 완료됩니다.</div>`, "신청하기");
+  if(!ok) return;
+  const order = { uid:user.uid, name:profile.name||"", phone:profile.phone||"", items, total, qtyTotal: cartQty(), pickupDate:cartForm.pickupDate, pickupTime:cartForm.pickupTime, depositor:dep, memo:cartForm.memo.trim(), paid:false, paidAt:null, status:"active", createdAt:DB.ts(), updatedAt:DB.ts() };
+  try {
+    const id = await DB.add(C.orders, order);
+    await log("order_create", `예약 신청 ${won(total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(order.pickupDate)} ${order.pickupTime} / 입금자명 ${dep} (${id})`);
+    cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"" }; saveCartLocal();
+    tab = "done"; render(); window.scrollTo(0,0);
+    accountModal(total, dep);
+  } catch(e){ toast(authMsg(e)); }
+}
+
+function renderDoneTab(body){
+  const list = [...ORDERS].sort((a,b) => (toDate(b.createdAt)||0) - (toDate(a.createdAt)||0));
+  if(!list.length){ body.innerHTML = `<div class="card" style="text-align:center;padding:30px"><div style="font-size:30px">🧺</div><p>아직 신청하신 예약이 없습니다.</p><button id="toOrder">주문하러 가기</button></div>`; $("#toOrder").onclick = () => { tab="order"; render(); }; return; }
+  body.innerHTML = list.map(o => {
+    const cancelled = o.status === "cancelled";
+    return `<div class="card">
+      ${cancelled ? `<div class="status-cancel">취소된 예약입니다</div>` : o.paid ? `<div class="status-ok">✓ 예약이 완료되었습니다</div>` : `<div class="status-wait">입금확인후 예약이 완료됩니다</div>
+        <div class="acct"><div>${esc(S.bank)}</div><div class="num">${esc(S.account)}</div><div>예금주: ${esc(S.holder)}</div>
+          <div style="margin-top:6px">입금하실 금액 <b style="color:var(--tc)">${won(o.total)}</b> / 입금자명 <b>${esc(o.depositor)}</b></div>
+          <button class="sm" data-copy="1" style="margin-top:8px">계좌 복사하기</button></div>
+        <p class="hint" style="text-align:center;margin:4px 0 0">입금자명을 <b>${esc(o.depositor)}</b>으로 입금해 주세요. 확인 후 이 화면에 완료 표시가 뜹니다.</p>`}
+      <div style="margin-top:12px">${(o.items||[]).map(i => `<div class="cline"><div class="n">${esc(i.name)}<small>${won(i.price)} × ${i.qty}</small></div><div class="p">${won(i.price*i.qty)}</div></div>`).join("")}</div>
+      <div class="row between" style="margin-top:8px"><span>합계</span><b>${won(o.total)}</b></div>
+      <div class="row between"><span>픽업</span><b>${esc(fmtPickDate(o.pickupDate))} ${esc(o.pickupTime)}</b></div>
+      <div class="row between"><span>입금자명</span><b>${esc(o.depositor)}</b></div>
+      ${o.memo ? `<div class="row between"><span>요청사항</span><span>${esc(o.memo)}</span></div>` : ""}
+      <div class="hint" style="margin-top:6px">신청 ${fmtDT(o.createdAt)}${o.paid&&o.paidAt ? " · 입금확인 "+fmtDT(o.paidAt) : ""}</div>
+      ${(!cancelled && !o.paid) ? `<div style="text-align:right;margin-top:8px"><button class="ghost sm" data-cancel="${o.id}">예약 취소</button></div>` : ""}
+    </div>`; }).join("") + `<p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p>`;
+  body.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => toast((await copyText(S.account)) ? "계좌번호가 복사되었습니다" : "복사에 실패했습니다"));
+  body.querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => {
+    const o = ORDERS.find(x => x.id === b.dataset.cancel); if(!o) return;
+    if(!(await confirmModal("예약 취소", "이 예약을 취소하시겠습니까?<br><span class='hint'>이미 입금하셨다면 취소하지 마시고 매장으로 연락해 주세요.</span>", "취소하기", true))) return;
+    try { await DB.update(C.orders, o.id, { status:"cancelled", updatedAt:DB.ts() }); await log("order_cancel", `예약 취소 ${won(o.total)} (${o.id})`); toast("예약이 취소되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
+}
+
+/* ---------- 관리자 화면 ---------- */
+function renderAdmin(app){
+  const tabs = [["list","예약자 명단"],["menu","품목 관리"],["settings","설정"],["log","기록"]];
+  app.innerHTML = header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav><div class="wrap wide" id="body"></div>`;
+  bindHeader();
+  app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
+  const body = $("#body");
+  ({list:renderAdminList, menu:renderAdminMenu, settings:renderAdminSettings, log:renderAdminLog}[tab]||renderAdminList)(body);
+}
+
+const COLS = [["name","주문자명"],["phone","전화번호"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계금액"],["pickupDate","픽업날짜"],["pickupTime","픽업시간"],["depositor","입금자명"],["paid","입금여부"],["createdAt","신청일시"],["memo","요청사항"]];
+function orderRows(){
+  return ORDERS.map(o => ({ ...o, itemsText:(o.items||[]).map(i => `${i.name} ${i.qty}`).join("\n"), createdMs: toDate(o.createdAt)?toDate(o.createdAt).getTime():0, phoneText: fmtPhone(o.phone) }));
+}
+function filteredRows(){
+  let rows = orderRows();
+  if(!showCancelled) rows = rows.filter(r => r.status !== "cancelled");
+  const q = adminQ.trim().toLowerCase();
+  if(q){ rows = rows.filter(r => [r.name, r.phone, r.phoneText, r.itemsText, r.qtyTotal, r.total, fmtPickDate(r.pickupDate), r.pickupDate, r.pickupTime, r.depositor, r.paid?"입금완료 완료 o":"미입금 대기 x", fmtDT(r.createdAt), r.memo, r.status==="cancelled"?"취소":""].join(" ").toLowerCase().includes(q)); }
+  const k = adminSort.key, d = adminSort.dir;
+  rows.sort((a,b) => { let x = a[k], y = b[k]; if(k==="createdAt"){ x=a.createdMs; y=b.createdMs; } if(k==="paid"){ x = a.paid?1:0; y = b.paid?1:0; } if(typeof x==="number"||typeof y==="number") return ((x||0)-(y||0))*d; return String(x||"").localeCompare(String(y||""),"ko")*d; });
+  return rows;
+}
+function renderAdminList(body){
+  const rows = filteredRows();
+  const all = ORDERS.filter(o => o.status !== "cancelled");
+  const paid = all.filter(o => o.paid);
+  const perItem = {}; all.forEach(o => (o.items||[]).forEach(i => { perItem[i.name] = (perItem[i.name]||0) + i.qty; }));
+  body.innerHTML = `
+    <div class="stats"><div class="stat">예약 건수<b>${all.length}</b></div><div class="stat">입금완료<b style="color:var(--ok)">${paid.length}</b></div><div class="stat">입금대기<b style="color:#b3741f">${all.length-paid.length}</b></div><div class="stat">총 수량<b>${all.reduce((s,o)=>s+(o.qtyTotal||0),0)}</b></div><div class="stat">총 금액<b>${won(all.reduce((s,o)=>s+(o.total||0),0))}</b></div><div class="stat">입금액<b>${won(paid.reduce((s,o)=>s+(o.total||0),0))}</b></div></div>
+    <div class="stats">${Object.entries(perItem).map(([n,q]) => `<div class="stat">${esc(n)}<b>${q}</b></div>`).join("") || ""}</div>
+    <div class="toolbar"><input id="q" placeholder="검색 (이름, 전화, 품목, 입금자명, 날짜, 입금여부…)" value="${esc(adminQ)}"><label class="row" style="font-size:13px;gap:4px"><input type="checkbox" id="showCancel" style="width:18px" ${showCancelled?"checked":""}>취소 포함</label><div class="spacer"></div><span class="hint">${rows.length}건</span><button class="ok" id="xlsBtn">엑셀 다운로드</button></div>
+    <div class="tblwrap"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}">${l}${adminSort.key===k?`<span class="arr">${adminSort.dir>0?"▲":"▼"}</span>`:""}</th>`).join("")}<th>상태</th><th></th></tr></thead>
+    <tbody>${rows.map(r => `<tr class="${r.status==="cancelled"?"cancelled":""} ${r.paid?"paid":""}">
+      <td><b>${esc(r.name)}</b></td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${esc(fmtPickDate(r.pickupDate))}</td><td>${esc(r.pickupTime)}</td><td>${esc(r.depositor)}</td>
+      <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:`<span class="pill wait">대기</span>`}</label>`}</td>
+      <td>${fmtDT(r.createdAt)}</td><td style="white-space:pre-line;max-width:200px">${esc(r.memo||"")}</td>
+      <td class="nol">${r.status==="cancelled"?`<span class="pill cancel">취소</span>`:r.paid?`<span class="pill ok">완료</span>`:`<span class="pill wait">입금대기</span>`}</td>
+      <td class="nol"><button class="ghost sm" data-del="${r.id}">삭제</button></td></tr>`).join("")}
+      ${rows.length===0 ? `<tr><td colspan="${COLS.length+2}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>
+    <p class="hint">제목을 누르면 정렬(다시 누르면 역순)됩니다. 입금여부 칸을 체크하면 고객 화면에 '예약이 완료되었습니다'로 표시됩니다.</p>`;
+  const q = $("#q"); q.oninput = () => { adminQ = q.value; const pos = q.selectionStart; render(); const nq = $("#q"); nq.focus(); nq.setSelectionRange(pos,pos); };
+  $("#showCancel").onchange = e => { showCancelled = e.target.checked; render(); };
+  body.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; if(adminSort.key===k) adminSort.dir *= -1; else adminSort = {key:k, dir:1}; render(); });
+  body.querySelectorAll("[data-paid]").forEach(c => c.onchange = async () => {
+    const o = ORDERS.find(x => x.id === c.dataset.paid); if(!o) return;
+    const on = c.checked;
+    if(!on && !(await confirmModal("입금확인 해제", `<b>${esc(o.name)}</b>님의 입금확인을 해제하시겠습니까?<br><span class="hint">고객 화면이 다시 '입금확인후 예약이 완료됩니다'로 바뀝니다.</span>`, "해제", true))) { render(); return; }
+    try { await DB.update(C.orders, o.id, { paid:on, paidAt: on ? DB.ts() : null, updatedAt: DB.ts() }); await log(on?"paid_on":"paid_off", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 입금확인 ${on?"체크":"해제"} (${o.id})`); toast(on ? `${o.name}님 입금확인 완료` : "입금확인 해제"); } catch(e){ toast(authMsg(e)); render(); }
+  });
+  body.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const o = ORDERS.find(x => x.id === b.dataset.del); if(!o) return;
+    if(!(await confirmModal("예약 삭제", `<b>${esc(o.name)}</b>님의 예약을 삭제하시겠습니까?<br><span class="hint">삭제하면 명단에서 완전히 사라집니다. 취소 처리만 원하시면 고객이 직접 취소하거나 그대로 두세요.</span>`, "삭제", true))) return;
+    try { await DB.del(C.orders, o.id); await log("order_delete", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 예약 삭제 (${o.id})`); toast("삭제되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
+  $("#xlsBtn").onclick = exportExcel;
+}
+function exportExcel(){
+  const rows = filteredRows();
+  const names = MENU.map(m => m.name);
+  const head = ["주문자명","전화번호","예약품목","수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","신청일시","입금확인일시","요청사항", ...names];
+  const data = rows.map(r => [r.name, r.phoneText, r.itemsText.replace(/\n/g,", "), r.qtyTotal||0, r.total||0, fmtPickDate(r.pickupDate), r.pickupTime, r.depositor, r.paid?"입금완료":"미입금", r.status==="cancelled"?"취소":"예약", fmtDT(r.createdAt), fmtDT(r.paidAt), r.memo||"", ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : ""; })]);
+  const fname = `추석예약자명단_${new Date().toISOString().slice(0,10).replace(/-/g,"")}`;
+  if(window.XLSX){
+    const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
+    ws["!cols"] = head.map((h,i) => ({ wch: i===2 ? 40 : Math.max(10, h.length*2+2) }));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "예약자명단");
+    XLSX.writeFile(wb, fname + ".xlsx");
+  } else {
+    const csv = "﻿" + [head, ...data].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download = fname + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
+  }
+  log("export", `엑셀 다운로드 ${rows.length}건`);
+}
+
+function renderAdminMenu(body){
+  body.innerHTML = `<p class="hint">품목 이름, 금액, 설명, 사진을 수정하고 저장을 누르세요. 사진은 자동으로 줄여서 저장됩니다. '판매'를 끄면 고객 화면에서 숨겨집니다.</p>
+    ${MENU.map(m => `<div class="card" data-mid="${m.id}"><div class="adm-item">
+      <div>${m.image ? `<img src="${m.image}" alt="">` : `<div class="noimg">사진 없음</div>`}<input type="file" accept="image/*" data-img="${m.id}" style="margin-top:6px;font-size:12px;padding:4px">${m.image?`<button class="ghost sm" data-rmimg="${m.id}" style="margin-top:4px">사진 삭제</button>`:""}</div>
+      <div><label class="f">품목명</label><input data-f="name" value="${esc(m.name)}"><label class="f">금액(원)</label><input data-f="price" type="number" inputmode="numeric" value="${m.price}"><label class="f">설명(구성, 원재료)</label><textarea data-f="desc">${esc(m.desc||"")}</textarea>
+        <div class="row" style="margin-top:8px;flex-wrap:wrap"><label class="row" style="gap:4px;font-size:14px"><input type="checkbox" data-f="active" style="width:18px" ${m.active!==false?"checked":""}>판매</label><label class="row" style="gap:4px;font-size:14px">순서 <input data-f="sort" type="number" value="${m.sort||0}" style="width:70px"></label><div class="spacer"></div><button class="ghost sm danger" style="color:#fff" data-delm="${m.id}">삭제</button><button class="sm" data-save="${m.id}">저장</button></div></div>
+    </div></div>`).join("")}
+    <div class="row" style="gap:8px"><button class="ghost" id="addMenu">+ 품목 추가</button><button class="ghost" id="resetMenu">기본 5개 품목 불러오기</button></div>`;
+  const pending = {};
+  body.querySelectorAll("[data-img]").forEach(inp => inp.onchange = async () => { const f = inp.files[0]; if(!f) return; try { pending[inp.dataset.img] = await resizeImage(f, 720, 0.82); toast("사진이 준비되었습니다. 저장을 눌러주세요"); inp.closest(".adm-item").querySelector("img, .noimg").outerHTML = `<img src="${pending[inp.dataset.img]}" alt="">`; } catch(e){ toast("사진을 읽을 수 없습니다"); } });
+  body.querySelectorAll("[data-rmimg]").forEach(b => b.onclick = async () => { await DB.update(C.menu, b.dataset.rmimg, { image: null }); toast("사진 삭제"); });
+  body.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
+    const card = b.closest(".card"); const id = b.dataset.save; const g = f => card.querySelector(`[data-f="${f}"]`);
+    const data = { name:g("name").value.trim(), price:Number(g("price").value)||0, desc:g("desc").value, active:g("active").checked, sort:Number(g("sort").value)||0, updatedAt:DB.ts() };
+    if(!data.name) return toast("품목명을 입력해 주세요");
+    if(pending[id]) data.image = pending[id];
+    try { await DB.set(C.menu, id, data, true); await log("menu_save", `품목 저장: ${data.name} ${won(data.price)}`); toast("저장되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
+  body.querySelectorAll("[data-delm]").forEach(b => b.onclick = async () => { const m = MENU.find(x => x.id===b.dataset.delm); if(!(await confirmModal("품목 삭제", `<b>${esc(m.name)}</b> 품목을 삭제하시겠습니까?`, "삭제", true))) return; await DB.del(C.menu, m.id); await log("menu_delete", `품목 삭제: ${m.name}`); });
+  $("#addMenu").onclick = async () => { const id = "m" + Date.now(); await DB.set(C.menu, id, { name:"새 품목", price:0, desc:"", active:false, sort:(MENU.length?Math.max(...MENU.map(m=>m.sort||0)):0)+1, createdAt:DB.ts() }); toast("품목이 추가되었습니다 (판매 꺼짐 상태)"); };
+  $("#resetMenu").onclick = async () => { if(!(await confirmModal("기본 품목 불러오기", "2026 추석 품목 5개를 불러옵니다. 같은 번호(m1~m5)의 품목은 이름·금액·설명이 기본값으로 덮어써집니다(사진은 유지).", "불러오기"))) return; for(const m of DEFAULT_MENU){ const {id,...rest} = m; await DB.set(C.menu, id, rest, true); } toast("불러왔습니다"); };
+}
+function resizeImage(file, max, q){
+  return new Promise((res, rej) => { const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => { const r = Math.min(1, max/Math.max(img.width,img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width*r); c.height = Math.round(img.height*r); c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); res(c.toDataURL("image/jpeg", q)); };
+    img.onerror = rej; img.src = url; });
+}
+
+function renderAdminSettings(body){
+  body.innerHTML = `<div class="card"><h3>입금 계좌</h3>
+      <label class="f">은행</label><input id="sBank" value="${esc(S.bank)}"><label class="f">계좌번호 (숫자만, 복사 시 이 값만 복사됨)</label><input id="sAcct" value="${esc(S.account)}"><label class="f">예금주</label><input id="sHolder" value="${esc(S.holder)}"></div>
+    <div class="card"><h3>예약 접수</h3>
+      <label class="row" style="gap:6px"><input type="checkbox" id="sOpen" style="width:18px" ${S.orderOpen!==false?"checked":""}>예약 접수 열림 (끄면 즉시 마감 표시)</label>
+      <label class="f">자동 마감 일시</label><input id="sDeadline" type="datetime-local" value="${esc(S.deadline||"")}">
+      <label class="f">한정 수량 안내 문구</label><input id="sLimit" value="${esc(S.limitNote)}">
+      <label class="f">문의 전화</label><input id="sPhone" value="${esc(S.phone)}"></div>
+    <div class="card"><h3>픽업</h3>
+      <label class="f">픽업 가능 날짜 (쉼표로 구분, 예: 2026-09-23, 2026-09-24)</label><input id="sDates" value="${esc((S.pickupDates||[]).join(", "))}">
+      <div class="row"><div style="flex:1"><label class="f">시작 시(24시간)</label><input id="sStart" type="number" value="${S.timeStart}"></div><div style="flex:1"><label class="f">종료 시(24시간)</label><input id="sEnd" type="number" value="${S.timeEnd}"></div></div></div>
+    <div class="card"><h3>안내문 (주문 화면 상단)</h3><textarea id="sNotice" style="min-height:200px">${esc(S.notice)}</textarea>
+      <label class="f">꽃밥에서 사용하는 재료들</label><textarea id="sMat">${esc(S.materials||"")}</textarea></div>
+    <button id="saveS" style="width:100%;padding:13px">설정 저장</button>
+    <div class="card" style="margin-top:20px"><h3>회원 목록</h3><p class="hint">가입한 고객 ${USERS.length}명 (비밀번호를 잊은 고객은 Firebase 콘솔 Authentication에서 해당 번호의 계정을 삭제하면 다시 가입할 수 있습니다.)</p>
+      <div class="tblwrap"><table style="min-width:400px"><thead><tr><th>성명</th><th>핸드폰</th><th>가입</th><th>최근 로그인</th></tr></thead><tbody>${[...USERS].sort((a,b)=>(toDate(b.createdAt)||0)-(toDate(a.createdAt)||0)).map(u => `<tr><td>${esc(u.name)}</td><td>${esc(fmtPhone(u.phone))}</td><td>${fmtDT(u.createdAt)}</td><td>${fmtDT(u.lastLoginAt)}</td></tr>`).join("")}</tbody></table></div></div>`;
+  $("#saveS").onclick = async () => {
+    const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
+      pickupDates:$("#sDates").value.split(",").map(s=>s.trim()).filter(Boolean), timeStart:Number($("#sStart").value)||12, timeEnd:Number($("#sEnd").value)||19, notice:$("#sNotice").value, materials:$("#sMat").value, updatedAt:DB.ts() };
+    if(data.timeEnd <= data.timeStart) return toast("종료 시는 시작 시보다 커야 합니다");
+    try { await DB.set(C.meta, "settings", data, true); await log("settings_save", "설정 저장"); toast("설정이 저장되었습니다"); } catch(e){ toast(authMsg(e)); }
+  };
+}
+
+const LOG_LABEL = { signup:"회원가입", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+function renderAdminLog(body){
+  const q = logQ.trim().toLowerCase();
+  let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
+  if(q) list = list.filter(l => [LOG_LABEL[l.type]||l.type, l.name, l.phone, l.detail, fmtDT(l.at)].join(" ").toLowerCase().includes(q));
+  body.innerHTML = `<div class="toolbar"><input id="lq" placeholder="기록 검색" value="${esc(logQ)}"><span class="hint">${list.length}건</span></div>
+    <div class="card">${list.slice(0,500).map(l => `<div class="log"><span class="t">${fmtDT(l.at)}</span><span class="ty">${esc(LOG_LABEL[l.type]||l.type)}</span><span><b>${esc(l.name||"")}</b> ${esc(fmtPhone(l.phone||""))} ${esc(l.detail||"")}</span></div>`).join("") || `<p class="hint">기록이 없습니다.</p>`}</div>`;
+  const i = $("#lq"); i.oninput = () => { logQ = i.value; const p = i.selectionStart; render(); $("#lq").focus(); $("#lq").setSelectionRange(p,p); };
+}
+</script>
+</body>
+</html>
