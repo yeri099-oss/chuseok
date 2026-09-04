@@ -661,7 +661,7 @@ function renderAdmin(app){
   ({list:renderAdminList, menu:renderAdminMenu, settings:renderAdminSettings, log:renderAdminLog}[tab]||renderAdminList)(body);
 }
 
-const COLS = [["name","주문자명"],["phone","전화번호"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계금액"],["pickupDate","픽업날짜"],["pickupTime","픽업시간"],["depositor","입금자명"],["paid","입금여부"],["createdAt","신청일시"],["memo","요청사항"]];
+const COLS = [["source","접수"],["name","주문자명"],["phone","전화번호"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계금액"],["pickupDate","픽업날짜"],["pickupTime","픽업시간"],["depositor","입금자명"],["paid","입금여부"],["createdAt","신청일시"],["memo","요청사항"]];
 function orderRows(){
   return ORDERS.map(o => ({ ...o, itemsText:(o.items||[]).map(i => `${i.name} ${i.qty}`).join("\n"), createdMs: toDate(o.createdAt)?toDate(o.createdAt).getTime():0, phoneText: fmtPhone(o.phone) }));
 }
@@ -669,7 +669,7 @@ function filteredRows(){
   let rows = orderRows();
   if(!showCancelled) rows = rows.filter(r => r.status !== "cancelled");
   const q = adminQ.trim().toLowerCase();
-  if(q){ rows = rows.filter(r => [r.name, r.phone, r.phoneText, r.itemsText, r.qtyTotal, r.total, fmtPickDate(r.pickupDate), r.pickupDate, r.pickupTime, r.depositor, r.paid?"입금완료 완료 o":"미입금 대기 x", fmtDT(r.createdAt), r.memo, r.status==="cancelled"?"취소":""].join(" ").toLowerCase().includes(q)); }
+  if(q){ rows = rows.filter(r => [r.name, r.phone, r.phoneText, r.itemsText, r.qtyTotal, r.total, fmtPickDate(r.pickupDate), r.pickupDate, r.pickupTime, r.depositor, r.paid?"입금완료 완료 o":"미입금 대기 x", fmtDT(r.createdAt), r.memo, r.status==="cancelled"?"취소":"", r.source==="phone"?"전화":"앱"].join(" ").toLowerCase().includes(q)); }
   const k = adminSort.key, d = adminSort.dir;
   rows.sort((a,b) => { let x = a[k], y = b[k]; if(k==="createdAt"){ x=a.createdMs; y=b.createdMs; } if(k==="paid"){ x = a.paid?1:0; y = b.paid?1:0; } if(typeof x==="number"||typeof y==="number") return ((x||0)-(y||0))*d; return String(x||"").localeCompare(String(y||""),"ko")*d; });
   return rows;
@@ -682,9 +682,9 @@ function renderAdminList(body){
   const perItem = {}; all.forEach(o => (o.items||[]).forEach(i => { perItem[i.name] = (perItem[i.name]||0) + i.qty; }));
   body.innerHTML = `
     ${pend.length ? `<div class="emph" style="display:flex;align-items:center;gap:8px"><span style="flex:1">비밀번호 초기화 요청 ${pend.length}건이 있습니다. (${pend.map(r => esc(r.name)).join(", ")})</span><button class="sm" id="goResets">처리하러 가기</button></div>` : ""}
-    <div class="stats"><div class="stat">예약 건수<b>${all.length}</b></div><div class="stat">입금완료<b style="color:var(--ok)">${paid.length}</b></div><div class="stat">입금대기<b style="color:#b3741f">${all.length-paid.length}</b></div><div class="stat">총 수량<b>${all.reduce((s,o)=>s+(o.qtyTotal||0),0)}</b></div><div class="stat">총 금액<b>${won(all.reduce((s,o)=>s+(o.total||0),0))}</b></div><div class="stat">입금액<b>${won(paid.reduce((s,o)=>s+(o.total||0),0))}</b></div></div>
+    <div class="stats"><div class="stat">예약 건수<b>${all.length}</b></div><div class="stat">입금완료<b style="color:var(--ok)">${paid.length}</b></div><div class="stat">입금대기<b style="color:#b3741f">${all.length-paid.length}</b></div><div class="stat">취소<b style="color:#888">${ORDERS.length-all.length}</b></div><div class="stat">총 수량<b>${all.reduce((s,o)=>s+(o.qtyTotal||0),0)}</b></div><div class="stat">총 금액<b>${won(all.reduce((s,o)=>s+(o.total||0),0))}</b></div><div class="stat">입금액<b>${won(paid.reduce((s,o)=>s+(o.total||0),0))}</b></div></div>
     <div class="stats">${Object.entries(perItem).map(([n,q]) => `<div class="stat">${esc(n)}<b>${q}</b></div>`).join("") || ""}</div>
-    <div class="toolbar"><input id="q" placeholder="검색" value="${esc(adminQ)}"><label class="row" style="font-size:13px;gap:4px"><input type="checkbox" id="showCancel" style="width:18px" ${showCancelled?"checked":""}>취소 포함</label><div class="spacer"></div><span class="hint" id="rowCount">${rows.length}건</span><button class="ok" id="xlsBtn">엑셀 다운로드</button></div>
+    <div class="toolbar"><input id="q" placeholder="검색" value="${esc(adminQ)}"><label class="row" style="font-size:13px;gap:4px"><input type="checkbox" id="showCancel" style="width:18px" ${showCancelled?"checked":""}>취소 포함</label><div class="spacer"></div><span class="hint" id="rowCount">${rows.length}건</span><button id="addOrderBtn">+ 전화 예약 추가</button><button class="ok" id="xlsBtn">엑셀 다운로드</button></div>
     <div id="listArea"></div>
     <p class="hint">제목을 누르면 정렬(다시 누르면 역순)됩니다. 입금여부 칸을 체크하면 고객 화면에 '예약이 완료되었습니다'로 표시됩니다.</p>`;
   renderListTable();
@@ -692,6 +692,7 @@ function renderAdminList(body){
   const gr = $("#goResets"); if(gr) gr.onclick = () => { tab = "settings"; render(); };
   $("#showCancel").onchange = e => { showCancelled = e.target.checked; renderListTable(); };
   $("#xlsBtn").onclick = exportExcel;
+  $("#addOrderBtn").onclick = () => orderFormModal(null);
 }
 function renderListTable(){
   const area = $("#listArea"); if(!area) return;
@@ -699,11 +700,11 @@ function renderListTable(){
   const rc = $("#rowCount"); if(rc) rc.textContent = rows.length + "건";
   area.innerHTML = `<div class="tblwrap"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}">${l}${adminSort.key===k?`<span class="arr">${adminSort.dir>0?"▲":"▼"}</span>`:""}</th>`).join("")}<th>상태</th><th></th></tr></thead>
     <tbody>${rows.map(r => `<tr class="${r.status==="cancelled"?"cancelled":""} ${r.paid?"paid":""}">
-      <td><b>${esc(r.name)}</b></td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${esc(fmtPickDate(r.pickupDate))}</td><td>${esc(r.pickupTime)}</td><td>${esc(r.depositor)}</td>
+      <td class="nol">${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${esc(fmtPickDate(r.pickupDate))}</td><td>${esc(r.pickupTime)}</td><td>${esc(r.depositor)}</td>
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:`<span class="pill wait">대기</span>`}</label>`}</td>
       <td>${fmtDT(r.createdAt)}</td><td style="white-space:pre-line;max-width:200px">${esc(r.memo||"")}</td>
       <td class="nol">${r.status==="cancelled"?`<span class="pill cancel">취소</span>`:r.paid?`<span class="pill ok">완료</span>`:`<span class="pill wait">입금대기</span>`}</td>
-      <td class="nol"><button class="ghost sm" data-del="${r.id}">삭제</button></td></tr>`).join("")}
+      <td class="nol" style="white-space:nowrap"><button class="ghost sm" data-edit="${r.id}">수정</button> ${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`} <button class="ghost sm" data-del="${r.id}">삭제</button></td></tr>`).join("")}
       ${rows.length===0 ? `<tr><td colspan="${COLS.length+2}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
   const body = area;
   body.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; if(adminSort.key===k) adminSort.dir *= -1; else adminSort = {key:k, dir:1}; renderListTable(); });
@@ -713,21 +714,32 @@ function renderListTable(){
     if(!on && !(await confirmModal("입금확인 해제", `<b>${esc(o.name)}</b>님의 입금확인을 해제하시겠습니까?<br><span class="hint">고객 화면이 다시 '입금확인후 예약이 완료됩니다'로 바뀝니다.</span>`, "해제", true))) { renderListTable(); return; }
     try { await DB.update(C.orders, o.id, { paid:on, paidAt: on ? DB.ts() : null, updatedAt: DB.ts() }); await log(on?"paid_on":"paid_off", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 입금확인 ${on?"체크":"해제"} (${o.id})`); toast(on ? `${o.name}님 입금확인 완료` : "입금확인 해제"); } catch(e){ toast(authMsg(e)); renderListTable(); }
   });
+  body.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const o = ORDERS.find(x => x.id === b.dataset.edit); if(o) orderFormModal(o); });
+  body.querySelectorAll("[data-cancelo]").forEach(b => b.onclick = async () => {
+    const o = ORDERS.find(x => x.id === b.dataset.cancelo); if(!o) return;
+    if(!(await confirmModal("예약 취소", `<b>${esc(o.name)}</b>님의 예약을 취소 처리하시겠습니까?<br><span class="hint">명단에는 '취소'로 남고(취소 포함 체크 시 표시), 고객 화면에도 '취소된 예약'으로 표시됩니다. 복구할 수 있습니다.</span>`, "취소 처리", true))) return;
+    try { await DB.update(C.orders, o.id, { status:"cancelled", paid:false, paidAt:null, cancelledBy:"admin", updatedAt:DB.ts() }); await log("order_cancel", `관리자 취소 ${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} (${o.id})`); toast("취소 처리되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
+  body.querySelectorAll("[data-restore]").forEach(b => b.onclick = async () => {
+    const o = ORDERS.find(x => x.id === b.dataset.restore); if(!o) return;
+    if(!(await confirmModal("예약 복구", `<b>${esc(o.name)}</b>님의 취소된 예약을 다시 살리시겠습니까?`, "복구"))) return;
+    try { await DB.update(C.orders, o.id, { status:"active", updatedAt:DB.ts() }); await log("order_restore", `예약 복구 ${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} (${o.id})`); toast("복구되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
   body.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     const o = ORDERS.find(x => x.id === b.dataset.del); if(!o) return;
-    if(!(await confirmModal("예약 삭제", `<b>${esc(o.name)}</b>님의 예약을 삭제하시겠습니까?<br><span class="hint">삭제하면 명단에서 완전히 사라집니다. 취소 처리만 원하시면 고객이 직접 취소하거나 그대로 두세요.</span>`, "삭제", true))) return;
+    if(!(await confirmModal("예약 삭제", `<b>${esc(o.name)}</b>님의 예약을 삭제하시겠습니까?<br><span class="hint">삭제하면 명단과 기록 화면에서 완전히 사라져 되돌릴 수 없습니다. 기록을 남기려면 삭제 대신 '취소'를 눌러 주세요.</span>`, "삭제", true))) return;
     try { await DB.del(C.orders, o.id); await log("order_delete", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 예약 삭제 (${o.id})`); toast("삭제되었습니다"); } catch(e){ toast(authMsg(e)); }
   });
 }
 function exportExcel(){
   const rows = filteredRows();
   const names = MENU.map(m => m.name);
-  const head = ["주문자명","전화번호","예약품목","수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","신청일시","입금확인일시","요청사항", ...names];
-  const data = rows.map(r => [r.name, r.phoneText, r.itemsText.replace(/\n/g,", "), r.qtyTotal||0, r.total||0, fmtPickDate(r.pickupDate), r.pickupTime, r.depositor, r.paid?"입금완료":"미입금", r.status==="cancelled"?"취소":"예약", fmtDT(r.createdAt), fmtDT(r.paidAt), r.memo||"", ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : ""; })]);
+  const head = ["접수","주문자명","전화번호","예약품목","수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","신청일시","입금확인일시","요청사항", ...names];
+  const data = rows.map(r => [r.source==="phone"?"전화":"앱", r.name, r.phoneText, r.itemsText.replace(/\n/g,", "), r.qtyTotal||0, r.total||0, fmtPickDate(r.pickupDate), r.pickupTime, r.depositor, r.paid?"입금완료":"미입금", r.status==="cancelled"?"취소":"예약", fmtDT(r.createdAt), fmtDT(r.paidAt), r.memo||"", ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : ""; })]);
   const fname = `추석예약자명단_${new Date().toISOString().slice(0,10).replace(/-/g,"")}`;
   if(window.XLSX){
     const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
-    ws["!cols"] = head.map((h,i) => ({ wch: i===2 ? 40 : Math.max(10, h.length*2+2) }));
+    ws["!cols"] = head.map((h,i) => ({ wch: i===3 ? 40 : Math.max(10, h.length*2+2) }));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "예약자명단");
     XLSX.writeFile(wb, fname + ".xlsx");
   } else {
@@ -794,6 +806,49 @@ function renderAdminSettings(body){
   };
 }
 
+function orderFormModal(o){
+  const isNew = !o; const slots = timeSlots(S);
+  const qty = {}; (o && o.items || []).forEach(i => qty[i.id] = i.qty);
+  const menu = MENU.filter(m => m.active !== false || qty[m.id]);
+  openModal(`<h3>${isNew ? "전화 예약 추가" : "예약 수정"}</h3>
+    <div class="row"><div style="flex:1"><label class="f">주문자명</label><input id="fName" value="${esc(o?o.name:"")}"></div><div style="flex:1"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):"")}" placeholder="010-1234-5678"></div></div>
+    <label class="f">예약 품목과 수량</label>
+    ${menu.map(m => `<div class="cline" style="padding:6px 0"><div class="n" style="font-size:14px">${esc(m.name)}<small>${won(m.price)}</small></div><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}" style="width:70px;padding:6px 8px;text-align:center"></div>`).join("")}
+    <div class="row between" style="margin-top:6px"><span>합계</span><b id="fTotal" style="color:var(--tc);font-size:17px">${won(o?o.total:0)}</b></div>
+    <div class="row"><div style="flex:1"><label class="f">픽업 날짜</label><select id="fDate">${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
+      <div style="flex:1"><label class="f">픽업 시간</label><select id="fTime">${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
+    <label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:"")}" placeholder="비우면 주문자명과 동일">
+    <label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":"")}">
+    <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o&&o.paid?"checked":""}>입금 확인됨</label>
+    <div class="err" id="fErr"></div>
+    <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "추가" : "저장"}</button></div>`);
+  const calc = () => { let t = 0; document.querySelectorAll("[data-q]").forEach(i => { const m = MENU.find(x => x.id===i.dataset.q); t += (Number(i.value)||0) * (Number(m.price)||0); }); $("#fTotal").textContent = won(t); return t; };
+  document.querySelectorAll("[data-q]").forEach(i => i.oninput = calc);
+  $("#mCancel").onclick = closeModal;
+  $("#mOk").onclick = async () => {
+    const name = $("#fName").value.trim(); const phone = digits($("#fPhone").value);
+    const items = []; document.querySelectorAll("[data-q]").forEach(i => { const q = Number(i.value)||0; if(q>0){ const m = MENU.find(x => x.id===i.dataset.q); items.push({ id:m.id, name:m.name, price:Number(m.price)||0, qty:q }); } });
+    const err = !name ? "주문자명을 입력해 주세요." : !/^0\d{8,10}$/.test(phone) ? "전화번호를 정확히 입력해 주세요." : !items.length ? "품목 수량을 1개 이상 입력해 주세요." : "";
+    if(err){ $("#fErr").textContent = err; return; }
+    const paid = $("#fPaid").checked;
+    const data = { name, phone, items, total: items.reduce((s,i)=>s+i.price*i.qty,0), qtyTotal: items.reduce((s,i)=>s+i.qty,0), pickupDate:$("#fDate").value, pickupTime:$("#fTime").value, depositor:($("#fDep").value.trim()||name), memo:$("#fMemo").value.trim(), paid, updatedAt:DB.ts() };
+    try {
+      if(isNew){
+        const u = USERS.find(x => x.phone === phone && !x.replacedBy);
+        Object.assign(data, { uid: u ? u.id : "phone:"+phone, source:"phone", status:"active", createdAt:DB.ts(), paidAt: paid ? DB.ts() : null, createdBy:"admin" });
+        const id = await DB.add(C.orders, data);
+        await log("order_phone", `전화 예약 추가 ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime}${paid?" / 입금확인":""} (${id})`);
+        toast("전화 예약이 추가되었습니다");
+      } else {
+        if(paid && !o.paid) data.paidAt = DB.ts(); if(!paid) data.paidAt = null;
+        await DB.update(C.orders, o.id, data);
+        await log("order_edit", `예약 수정 ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime} / 입금 ${paid?"확인":"미확인"} (${o.id})`);
+        toast("저장되었습니다");
+      }
+      closeModal();
+    } catch(e){ $("#fErr").textContent = authMsg(e); }
+  };
+}
 async function adminResetPassword(phone, name){
   const p = digits(phone);
   const old = USERS.filter(u => u.phone === p && !u.replacedBy);
@@ -818,7 +873,7 @@ async function adminResetPassword(phone, name){
     render();
   } catch(e){ toast(authMsg(e)); }
 }
-const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
 function renderAdminLog(body){
   const q = logQ.trim().toLowerCase();
   let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
