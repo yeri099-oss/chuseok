@@ -34,7 +34,8 @@ textarea{min-height:90px;resize:vertical}
 label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-weight:600}
 .wrap{max-width:760px;margin:0 auto;padding:0 14px 90px}
 .wrap.wide{max-width:1200px}
-header.top{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line)}
+.topwrap{position:sticky;top:0;z-index:20}
+header.top{background:#fff;border-bottom:1px solid var(--line)}
 header.top .in{max-width:760px;margin:0 auto;padding:8px 12px;display:flex;align-items:center;gap:8px}
 header.top button.sm{line-height:1.2;padding:6px 8px;white-space:nowrap}
 .mobile-who{display:none}
@@ -45,7 +46,7 @@ header.top .in.wide{max-width:1200px}
 .spacer{flex:1}
 .who{font-size:13px;color:var(--muted);text-align:right;line-height:1.25}
 .who b{color:var(--ink)}
-nav.tabs{position:sticky;top:57px;z-index:19;background:#fff;border-bottom:1px solid var(--line)}
+nav.tabs{background:#fff;border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.04)}
 nav.tabs .in{max-width:760px;margin:0 auto;display:flex}
 nav.tabs .in.wide{max-width:1200px}
 nav.tabs button{flex:1;background:none;color:var(--muted);border-radius:0;padding:12px 4px;font-weight:600;border-bottom:3px solid transparent;position:relative}
@@ -57,8 +58,8 @@ nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;b
 .notice b{color:var(--tc-dark)}
 .hint{font-size:13px;color:var(--muted)}
 .emph{background:var(--warn-light);border:1px solid #f1dcb0;color:#7a4e0c;border-radius:10px;padding:10px 12px;font-weight:600;font-size:14px;margin:8px 0}
-.menu{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
-@media(min-width:600px){.menu{grid-template-columns:1fr 1fr}}
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+@media(max-width:480px){.item .body{padding:10px}.item .name{font-size:14px}.item .desc{font-size:11px;line-height:1.35}.item .price{font-size:15px}.item .body .row{flex-direction:column;align-items:flex-start;gap:6px}.item .qty{width:100%;justify-content:space-between}.item .qty button{padding:8px 0;flex:1}.item .qty span{flex:1}}
 .item{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
 .item .img{width:100%;aspect-ratio:4/3;background:#f1ebe4 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><circle cx='60' cy='60' r='40' fill='%23e7dcd2'/><text x='60' y='66' font-size='14' text-anchor='middle' fill='%23a3958a' font-family='sans-serif'>사진 준비중</text></svg>") center/120px no-repeat;object-fit:cover;display:block}
 .item .body{padding:12px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
@@ -459,7 +460,7 @@ function renderCustomer(app){
   const tabs = [["order","주문"],["cart","장바구니"],["done","예약완료"]];
   const q = cartQty();
   const active = ORDERS.filter(o => o.status !== "cancelled").length;
-  app.innerHTML = header(false) + `<nav class="tabs"><div class="in">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}${k==="cart"&&q?`<span class="badge">${q}</span>`:""}${k==="done"&&active?`<span class="badge">${active}</span>`:""}</button>`).join("")}</div></nav>
+  app.innerHTML = `<div class="topwrap">` + header(false) + `<nav class="tabs"><div class="in">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}${k==="cart"&&q?`<span class="badge">${q}</span>`:""}${k==="done"&&active?`<span class="badge">${active}</span>`:""}</button>`).join("")}</div></nav></div>
     <div class="wrap" id="body"></div>`;
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
@@ -513,7 +514,7 @@ function renderCartTab(body){
       <label class="f">픽업 날짜</label>
       <div class="chips" id="dateChips">${(S.pickupDates||[]).map(d => `<button class="chip ${cartForm.pickupDate===d?"on":""}" data-d="${d}">${fmtPickDate(d)}</button>`).join("")}</div>
       <label class="f">픽업 시간대 (오후 ${S.timeStart}시 ~ ${S.timeEnd}시)</label>
-      <div class="chips" id="timeChips">${slots.map(t => `<button class="chip ${cartForm.pickupTime===t?"on":""}" data-t="${t}">${t}</button>`).join("")}</div>
+      <select id="timeSel"><option value="">시간대를 선택해 주세요</option>${slots.map(t => `<option value="${t}" ${cartForm.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select>
       <p class="hint" style="margin:8px 0 0">택배는 불가하며 퀵 발송은 가능합니다 (퀵비용 별도). 퀵 발송을 원하시면 아래 요청사항에 적어주세요.</p>
     </div>
     <div class="card"><h3>입금 안내</h3>
@@ -529,7 +530,7 @@ function renderCartTab(body){
     <p class="hint" style="text-align:center">예약 신청 후 입금해 주시면 확인 후 예약이 완료됩니다.</p>`;
   body.querySelectorAll(".qty button").forEach(b => b.onclick = () => { const id = b.dataset.id; cart[id] = Math.max(0,(cart[id]||0)+Number(b.dataset.d)); if(!cart[id]) delete cart[id]; saveCartLocal(); render(); });
   body.querySelectorAll("#dateChips .chip").forEach(b => b.onclick = () => { cartForm.pickupDate = b.dataset.d; saveCartLocal(); render(); });
-  body.querySelectorAll("#timeChips .chip").forEach(b => b.onclick = () => { cartForm.pickupTime = b.dataset.t; saveCartLocal(); render(); });
+  $("#timeSel").onchange = e => { cartForm.pickupTime = e.target.value; saveCartLocal(); };
   $("#depositor").oninput = e => { cartForm.depositor = e.target.value; saveCartLocal(); };
   $("#memo").oninput = e => { cartForm.memo = e.target.value; saveCartLocal(); };
   $("#acctBtn").onclick = () => accountModal(total, cartForm.depositor.trim());
@@ -562,7 +563,7 @@ async function submitOrder(){
     await log("order_create", `예약 신청 ${won(total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(order.pickupDate)} ${order.pickupTime} / 입금자명 ${dep} (${id})`);
     cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"" }; saveCartLocal();
     tab = "done"; render(); window.scrollTo(0,0);
-    accountModal(total, dep);
+    toast("예약이 신청되었습니다. 입금 후 확인을 기다려 주세요");
   } catch(e){ toast(authMsg(e)); }
 }
 
@@ -583,22 +584,77 @@ function renderDoneTab(body){
       <div class="row between"><span>입금자명</span><b>${esc(o.depositor)}</b></div>
       ${o.memo ? `<div class="row between"><span>요청사항</span><span>${esc(o.memo)}</span></div>` : ""}
       <div class="hint" style="margin-top:6px">신청 ${fmtDT(o.createdAt)}${o.paid&&o.paidAt ? " · 입금확인 "+fmtDT(o.paidAt) : ""}</div>
+      ${cancelled ? "" : `<div class="row" style="margin-top:10px;gap:8px"><button class="ghost sm" data-img="${o.id}" style="flex:1">이미지로 저장/공유</button><button class="ghost sm" data-share="${o.id}" style="flex:1">링크 공유</button></div>`}
       ${(!cancelled && !o.paid) ? `<div style="text-align:right;margin-top:8px"><button class="ghost sm" data-cancel="${o.id}">예약 취소</button></div>` : ""}
     </div>`; }).join("") + `<p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p><p style="text-align:center"><button class="ghost sm" id="pwChange">비밀번호 변경</button></p>`;
   $("#pwChange").onclick = pwChangeModal;
   body.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => toast((await copyText(S.account)) ? "계좌번호가 복사되었습니다" : "복사에 실패했습니다"));
+  body.querySelectorAll("[data-img]").forEach(b => b.onclick = () => { const o = ORDERS.find(x => x.id === b.dataset.img); if(o) shareOrderImage(o); });
+  body.querySelectorAll("[data-share]").forEach(b => b.onclick = () => { const o = ORDERS.find(x => x.id === b.dataset.share); if(o) shareOrderLink(o); });
   body.querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => {
     const o = ORDERS.find(x => x.id === b.dataset.cancel); if(!o) return;
-    if(!(await confirmModal("예약 취소", "이 예약을 취소하시겠습니까?<br><span class='hint'>이미 입금하셨다면 취소하지 마시고 매장으로 연락해 주세요.</span>", "취소하기", true))) return;
+    if(!(await confirmModal("예약 취소", "이 예약을 취소하시겠습니까?<br><span class='hint'>이미 입금하셨다면 취소하지 마시고 매장으로 연락해 주세요.<br>매장 전화: <b>02-766-6272</b></span>", "취소하기", true))) return;
     try { await DB.update(C.orders, o.id, { status:"cancelled", updatedAt:DB.ts() }); await log("order_cancel", `예약 취소 ${won(o.total)} (${o.id})`); toast("예약이 취소되었습니다"); } catch(e){ toast(authMsg(e)); }
   });
+}
+
+function orderSummaryText(o){
+  const lines = [`[꽃밥에피다 2026 추석 명절음식 예약]`, o.paid ? "예약이 완료되었습니다" : "입금확인후 예약이 완료됩니다", ""];
+  (o.items||[]).forEach(i => lines.push(`${i.name} × ${i.qty}  ${won(i.price*i.qty)}`));
+  lines.push(`합계 ${won(o.total)}`, `픽업 ${fmtPickDate(o.pickupDate)} ${o.pickupTime}`, `입금자명 ${o.depositor}`);
+  if(!o.paid) lines.push("", `입금계좌 ${S.bank} ${S.account} (${S.holder})`);
+  lines.push("", `문의 ${S.phone}`, location.origin + location.pathname);
+  return lines.join("\n");
+}
+async function shareOrderLink(o){
+  const text = orderSummaryText(o);
+  if(navigator.share){ try { await navigator.share({ title:"꽃밥에피다 추석 명절음식 예약", text }); return; } catch(e){ if(e && e.name === "AbortError") return; } }
+  toast((await copyText(text)) ? "예약 내용과 링크가 복사되었습니다" : "복사에 실패했습니다");
+}
+function drawOrderCard(o){
+  const W = 720, pad = 48; const items = o.items||[];
+  const H = 480 + items.length*44 + (o.paid ? 0 : 200);
+  const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
+  x.fillStyle = "#faf6f1"; x.fillRect(0,0,W,H);
+  x.fillStyle = "#fff"; x.fillRect(24,24,W-48,H-48); x.strokeStyle = "#e8e0d8"; x.lineWidth = 2; x.strokeRect(24,24,W-48,H-48);
+  const font = (sz,b) => `${b?"700":"400"} ${sz}px -apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif`;
+  let y = 90;
+  x.fillStyle = "#b5533c"; x.font = font(30,true); x.fillText("꽃밥에피다", pad, y);
+  x.fillStyle = "#7a716a"; x.font = font(20,false); x.fillText("2026 추석 명절음식 예약", pad+160, y);
+  y += 40;
+  x.fillStyle = o.paid ? "#e6f4ec" : "#fff5e1"; roundRect(x, pad, y, W-pad*2, 70, 14); x.fill();
+  x.fillStyle = o.paid ? "#2f8f5b" : "#7a4e0c"; x.font = font(28,true); x.textAlign = "center";
+  x.fillText(o.paid ? "✓ 예약이 완료되었습니다" : "입금확인후 예약이 완료됩니다", W/2, y+46); x.textAlign = "left";
+  y += 110;
+  x.fillStyle = "#2b2622"; x.font = font(22,false);
+  items.forEach(i => { x.fillText(`${i.name} × ${i.qty}`, pad, y); x.textAlign = "right"; x.fillText(won(i.price*i.qty), W-pad, y); x.textAlign = "left"; y += 44; });
+  x.strokeStyle = "#2b2622"; x.beginPath(); x.moveTo(pad, y-16); x.lineTo(W-pad, y-16); x.stroke(); y += 16;
+  const row = (k,v,big) => { x.fillStyle = "#7a716a"; x.font = font(22,false); x.fillText(k, pad, y); x.fillStyle = big ? "#b5533c" : "#2b2622"; x.font = font(big?28:24,true); x.textAlign = "right"; x.fillText(v, W-pad, y); x.textAlign = "left"; y += 46; };
+  row("합계", won(o.total), true); row("픽업", `${fmtPickDate(o.pickupDate)} ${o.pickupTime}`); row("입금자명", o.depositor||"");
+  row("주문자", `${o.name||""} ${fmtPhone(o.phone||"")}`);
+  if(!o.paid){ y += 10; x.strokeStyle = "#b5533c"; x.setLineDash([8,6]); roundRect(x, pad, y, W-pad*2, 120, 14); x.stroke(); x.setLineDash([]);
+    x.textAlign = "center"; x.fillStyle = "#2b2622"; x.font = font(20,false); x.fillText(`${S.bank}  예금주 ${S.holder}`, W/2, y+40);
+    x.fillStyle = "#8f3f2d"; x.font = font(34,true); x.fillText(S.account, W/2, y+90); x.textAlign = "left"; y += 140; }
+  x.fillStyle = "#7a716a"; x.font = font(18,false); x.fillText(`문의 ${S.phone}`, pad, H-56);
+  return c;
+}
+function roundRect(x,l,t,w,h,r){ x.beginPath(); x.moveTo(l+r,t); x.arcTo(l+w,t,l+w,t+h,r); x.arcTo(l+w,t+h,l,t+h,r); x.arcTo(l,t+h,l,t,r); x.arcTo(l,t,l+w,t,r); x.closePath(); }
+async function shareOrderImage(o){
+  try {
+    const c = drawOrderCard(o);
+    const blob = await new Promise(r => c.toBlob(r, "image/png"));
+    const file = new File([blob], "꽃밥에피다_예약.png", { type:"image/png" });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){ try { await navigator.share({ files:[file], title:"꽃밥에피다 추석 명절음식 예약" }); return; } catch(e){ if(e && e.name === "AbortError") return; } }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "꽃밥에피다_예약.png"; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
+    toast("이미지가 저장되었습니다");
+  } catch(e){ console.error(e); toast("이미지 생성에 실패했습니다"); }
 }
 
 /* ---------- 관리자 화면 ---------- */
 function renderAdmin(app){
   const pendingResets = RESETS.filter(r => r.status === "requested").length;
   const tabs = [["list","예약자 명단"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
-  app.innerHTML = header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav><div class="wrap wide" id="body"></div>`;
+  app.innerHTML = `<div class="topwrap">` + header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav></div><div class="wrap wide" id="body"></div>`;
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
   const body = $("#body");
