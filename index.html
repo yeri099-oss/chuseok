@@ -577,7 +577,6 @@ function renderCartTab(body){
       <div style="margin-top:12px"><button class="ghost" id="acctBtn" style="width:100%;border-color:var(--tc);color:var(--tc)">입금계좌 확인하기</button></div>
     </div>
     ${closed ? `<div class="emph">예약 접수가 마감되었습니다.</div>` : ""}
-    <div class="bigmsg">입금완료 순으로 예약이 확정됩니다</div>
     <button id="submitBtn" style="width:100%;padding:14px;font-size:17px" ${(!items.length||closed)?"disabled":""}>예약 신청하기 (${won(total)})</button>
     <p class="hint" style="text-align:center">예약 신청 후 입금해 주시면 확인 후 예약이 완료됩니다.</p>`;
   body.querySelectorAll(".qty button").forEach(b => b.onclick = () => { const id = b.dataset.id; cart[id] = Math.max(0,(cart[id]||0)+Number(b.dataset.d)); if(!cart[id]) delete cart[id]; saveCartLocal(); render(); });
@@ -650,7 +649,7 @@ function renderDoneTab(body){
   body.innerHTML = list.map(o => {
     const cancelled = o.status === "cancelled";
     return `<div class="card">
-      ${cancelled ? `<div class="status-cancel">취소된 예약입니다</div>` : o.paid ? `<div class="status-ok">✓ 예약이 완료되었습니다</div>` : `${o.customerPaid ? `<div class="status-claim">입금 확인 중입니다</div>` : `<div class="status-wait">입금확인후 예약이 완료됩니다</div>`}
+      ${cancelled ? `<div class="status-cancel">취소된 예약입니다</div>` : o.paid ? `<div class="status-ok">✓ 예약이 완료되었습니다</div>` : `${o.customerPaid ? `<div class="status-claim">입금 확인 중입니다</div>` : ``}
         <div class="bigmsg">입금완료 순으로 예약이 확정됩니다</div>
         <label class="paidbox"><input type="checkbox" data-claim="${o.id}" ${o.customerPaid?"checked":""}><span>${o.customerPaid ? `입금을 완료했습니다 <small class="hint" style="font-weight:500">(${fmtDT(o.customerPaidAt)} 표시 · 매장에서 확인 중)</small>` : "입금을 완료했습니다 (입금 후 체크해 주세요)"}</span></label>
         <div class="acct"><div>${esc(S.bank)}</div><div class="num">${esc(S.account)}</div><div>예금주: ${esc(S.holder)}</div>
@@ -686,7 +685,7 @@ function renderDoneTab(body){
 }
 
 function orderSummaryText(o){
-  const lines = [`[꽃밥에피다 2026 추석 명절음식 예약]`, o.paid ? "예약이 완료되었습니다" : (o.customerPaid ? "입금 확인 중입니다 (입금완료 순으로 예약 확정)" : "입금확인후 예약이 완료됩니다 (입금완료 순으로 예약 확정)"), ""];
+  const lines = [`[꽃밥에피다 2026 추석 명절음식 예약]`, o.paid ? "예약이 완료되었습니다" : (o.customerPaid ? "입금 확인 중입니다 (입금완료 순으로 예약 확정)" : "입금완료 순으로 예약이 확정됩니다"), ""];
   (o.items||[]).forEach(i => lines.push(`${i.name} × ${i.qty}  ${won(i.price*i.qty)}`));
   lines.push(`합계 ${won(o.total)}`, `픽업 ${fmtPickDate(o.pickupDate)} ${o.pickupTime}`, `입금자명 ${o.depositor}`);
   if(!o.paid) lines.push("", `입금계좌 ${S.bank} ${S.account} (${S.holder})`);
@@ -711,7 +710,7 @@ function drawOrderCard(o){
   y += 40;
   x.fillStyle = o.paid ? "#e6f4ec" : "#fff5e1"; roundRect(x, pad, y, W-pad*2, 70, 14); x.fill();
   x.fillStyle = o.paid ? "#2f8f5b" : "#7a4e0c"; x.font = font(28,true); x.textAlign = "center";
-  x.fillText(o.paid ? "✓ 예약이 완료되었습니다" : (o.customerPaid ? "입금 확인 중입니다" : "입금확인후 예약이 완료됩니다"), W/2, y+46); x.textAlign = "left";
+  x.fillText(o.paid ? "✓ 예약이 완료되었습니다" : (o.customerPaid ? "입금 확인 중입니다" : "입금완료 순으로 예약이 확정됩니다"), W/2, y+46); x.textAlign = "left";
   y += 110;
   x.fillStyle = "#2b2622"; x.font = font(22,false);
   items.forEach(i => { x.fillText(`${i.name} × ${i.qty}`, pad, y); x.textAlign = "right"; x.fillText(won(i.price*i.qty), W-pad, y); x.textAlign = "left"; y += 44; });
@@ -798,7 +797,7 @@ function renderListTable(){
   body.querySelectorAll("[data-paid]").forEach(c => c.onchange = async () => {
     const o = ORDERS.find(x => x.id === c.dataset.paid); if(!o) return;
     const on = c.checked;
-    if(!on && !(await confirmModal("입금확인 해제", `<b>${esc(o.name)}</b>님의 입금확인을 해제하시겠습니까?<br><span class="hint">고객 화면이 다시 '입금확인후 예약이 완료됩니다'로 바뀝니다.</span>`, "해제", true))) { renderListTable(); return; }
+    if(!on && !(await confirmModal("입금확인 해제", `<b>${esc(o.name)}</b>님의 입금확인을 해제하시겠습니까?<br><span class="hint">고객 화면의 '예약이 완료되었습니다' 표시가 사라집니다.</span>`, "해제", true))) { renderListTable(); return; }
     try { await DB.update(C.orders, o.id, { paid:on, paidAt: on ? DB.ts() : null, updatedAt: DB.ts() }); await log(on?"paid_on":"paid_off", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 입금확인 ${on?"체크":"해제"} (${o.id})`); toast(on ? `${o.name}님 입금확인 완료` : "입금확인 해제"); } catch(e){ toast(authMsg(e)); renderListTable(); }
   });
   body.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const o = ORDERS.find(x => x.id === b.dataset.edit); if(o) orderFormModal(o); });
