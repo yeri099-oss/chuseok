@@ -821,7 +821,7 @@ function orderFormModal(o){
   openModal(`<h3>${isNew ? "전화 예약 추가" : "예약 수정"}</h3>
     <div class="row"><div style="flex:1"><label class="f">주문자명</label><input id="fName" value="${esc(o?o.name:"")}"></div><div style="flex:1"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):"")}" placeholder="010-1234-5678"></div></div>
     <label class="f">예약 품목과 수량</label>
-    ${menu.map(m => `<div class="cline" style="padding:6px 0"><div class="n" style="font-size:14px">${esc(m.name)}<small>${won(m.price)}</small></div><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}" style="width:70px;padding:6px 8px;text-align:center"></div>`).join("")}
+    ${menu.map(m => `<div class="cline" style="padding:6px 0"><div class="n" style="font-size:14px">${esc(m.name)}<small>${won(m.price)}</small></div><div class="qty"><button type="button" data-qd="-1" data-for="${m.id}">−</button><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}" style="width:54px;padding:8px 4px;text-align:center;border:0;border-radius:0;font-weight:700"><button type="button" data-qd="1" data-for="${m.id}">+</button></div></div>`).join("")}
     <div class="row between" style="margin-top:6px"><span>합계</span><b id="fTotal" style="color:var(--tc);font-size:17px">${won(o?o.total:0)}</b></div>
     <div class="row"><div style="flex:1"><label class="f">픽업 날짜</label><select id="fDate">${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
       <div style="flex:1"><label class="f">픽업 시간</label><select id="fTime">${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
@@ -832,6 +832,7 @@ function orderFormModal(o){
     <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "추가" : "저장"}</button></div>`);
   const calc = () => { let t = 0; document.querySelectorAll("[data-q]").forEach(i => { const m = MENU.find(x => x.id===i.dataset.q); t += (Number(i.value)||0) * (Number(m.price)||0); }); $("#fTotal").textContent = won(t); return t; };
   document.querySelectorAll("[data-q]").forEach(i => i.oninput = calc);
+  document.querySelectorAll("[data-qd]").forEach(b => b.onclick = () => { const i = document.querySelector(`[data-q="${b.dataset.for}"]`); i.value = Math.max(0, (Number(i.value)||0) + Number(b.dataset.qd)); calc(); });
   $("#mCancel").onclick = closeModal;
   $("#mOk").onclick = async () => {
     const name = $("#fName").value.trim(); const phone = digits($("#fPhone").value);
