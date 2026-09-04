@@ -253,7 +253,7 @@ const phoneToEmail = (p,v) => digits(p) + ((Number(v)||1) > 1 ? "." + Number(v) 
 const loginInfo = async p => { try { return (await DB.get(C.login, digits(p))) || {}; } catch(e){ return {}; } };
 let toastT; const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); };
 async function copyText(t){ try { await navigator.clipboard.writeText(t); return true; } catch(e){ const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok = document.execCommand("copy"); }catch(_){} ta.remove(); return ok; } }
-const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 가입된 번호입니다. 로그인해 주세요. (매장에서 만들어 드린 계정이면 임시 비밀번호 " + TEMP_PW + ")"; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "번호 또는 비밀번호가 맞지 않습니다. 아직 가입 전이라면 회원가입을 눌러주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요)"; return "오류: " + ((e && (e.message||e.code)) || e); };
+const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 입력하셨던 번호입니다. 그때 정하신 비밀번호로 들어와 주세요. (매장에서 만들어 드린 계정이면 임시 비밀번호 " + TEMP_PW + ")"; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "전화번호 또는 비밀번호가 맞지 않습니다. 처음이시면 '주문자 정보 입력'으로 들어와 주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요)"; return "오류: " + ((e && (e.message||e.code)) || e); };
 
 /* ===================== 모달 ===================== */
 function openModal(html, opts={}){
@@ -294,7 +294,9 @@ let cart = {};            // {menuId: qty}
 let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"" };
 let tab = "order";
 let unsubs = [];
-let authMode = "login";   // login | signup | admin
+let authMode = "signup";  // signup(주문자 정보 입력, 기본) | login | admin | reset
+const remembered = () => { try { return JSON.parse(localStorage.getItem("chuseokLast")||"null") || {}; } catch(e){ return {}; } };
+const remember = (name, phone) => { try { localStorage.setItem("chuseokLast", JSON.stringify({ name, phone })); } catch(e){} };
 let adminSort = { key:"createdAt", dir:-1 };
 let adminQ = ""; let showCancelled = false; let logQ = "";
 let pendingSignup = null;
@@ -364,7 +366,19 @@ async function doSignup(name, phone, pw){
   if(pw.length < 6) throw "비밀번호는 6자리 이상으로 정해 주세요.";
   const info = await loginInfo(p);
   pendingSignup = { name, phone:p, email: phoneToEmail(p, info.v) };
-  await DB.signUp(pendingSignup.email, pw, name);
+  try { await DB.signUp(pendingSignup.email, pw, name); }
+  catch(e){
+    if((e.code||"").includes("email-already-in-use")){
+      // 이미 입력했던 분: 같은 비밀번호면 그대로 들어가기
+      pendingSignup = null;
+      try { await DB.signIn(phoneToEmail(p, info.v), pw); }
+      catch(e2){
+        if(info.resetAt && pw !== TEMP_PW) throw `이 번호는 ${fmtDT(info.resetAt)}에 비밀번호가 임시 비밀번호 ${TEMP_PW}으로 초기화되었습니다. ${TEMP_PW}으로 들어와 주세요.`;
+        if(info.createdByAdminAt && pw !== TEMP_PW) throw `이 번호는 매장에서 전화 예약 시 만들어 드린 계정입니다. 임시 비밀번호 ${TEMP_PW}으로 들어와 주세요.`;
+        throw "이미 입력하셨던 번호입니다. 그때 정하신 비밀번호를 입력해 주세요. 잊으셨다면 아래 '비밀번호를 잊으셨나요?'를 눌러 주세요.";
+      }
+    } else throw e;
+  }
 }
 async function doLogin(phone, pw){
   const p = digits(phone);
@@ -426,18 +440,20 @@ function renderAuth(app){
   app.innerHTML = `<div class="auth">
     <div class="logo"><img src="${LOGO}" alt="" style="width:88px;height:88px;border-radius:20px"><h1>꽃밥에피다</h1><p>2026 추석 명절음식 예약</p></div>
     <div class="card">
-      ${m==="reset" ? `<h3 style="margin:0 0 6px">비밀번호 초기화 요청</h3><p class="hint" style="margin:0 0 6px">가입하신 성명과 핸드폰번호를 적어 주세요. 담당자가 확인하면 비밀번호가 임시 비밀번호 <b>${TEMP_PW}</b>으로 초기화됩니다. 잠시 후 ${TEMP_PW}으로 로그인하신 뒤 새 비밀번호로 바꿔 주세요.<br>급하시면 ${esc(S.phone)} 로 연락 주세요.</p>` : m!=="admin" ? `<div class="seg"><button class="${m==="login"?"on":""}" data-m="login">로그인</button><button class="${m==="signup"?"on":""}" data-m="signup">회원가입</button></div>` : `<h3 style="margin:0 0 6px">관리자 로그인</h3>`}
+      ${m==="reset" ? `<h3 style="margin:0 0 6px">비밀번호 초기화 요청</h3><p class="hint" style="margin:0 0 6px">입력하셨던 이름과 전화번호를 적어 주세요. 담당자가 확인하면 비밀번호가 임시 비밀번호 <b>${TEMP_PW}</b>으로 초기화됩니다. 잠시 후 ${TEMP_PW}으로 들어오신 뒤 새 비밀번호로 바꿔 주세요.<br>급하시면 ${esc(S.phone)} 로 연락 주세요.</p>` : m==="signup" ? `<h3 style="margin:0 0 4px">주문자 정보 입력</h3><p class="hint" style="margin:0 0 6px">처음이시면 아래 정보가 저장되고, 이미 입력하셨던 분은 같은 정보로 바로 들어갑니다.</p>` : m==="login" ? `<h3 style="margin:0 0 4px">다시 들어오기</h3><p class="hint" style="margin:0 0 6px">전에 입력하신 전화번호와 비밀번호로 들어옵니다.</p>` : `<h3 style="margin:0 0 6px">관리자 로그인</h3>`}
       <form id="authForm" autocomplete="on">
-        ${(m==="signup"||m==="reset") ? `<label class="f">성명</label><input id="aName" placeholder="가입하신 분 성함" autocomplete="name">` : ""}
-        ${m==="admin" ? `<label class="f">관리자 아이디</label><input id="aId" autocomplete="username">` : `<label class="f">핸드폰번호</label><input id="aPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="tel">`}
+        ${(m==="signup"||m==="reset") ? `<label class="f">이름</label><input id="aName" placeholder="주문하시는 분 이름" autocomplete="name" value="${esc(remembered().name||"")}">` : ""}
+        ${m==="admin" ? `<label class="f">관리자 아이디</label><input id="aId" autocomplete="username">` : `<label class="f">전화번호</label><input id="aPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="tel" value="${esc(fmtPhone(remembered().phone||""))}">`}
         ${m==="reset" ? "" : `<label class="f">비밀번호 ${m==="signup" ? "<span style='font-weight:400'>(6자리 이상)</span>" : ""}</label><div style="position:relative"><input id="aPw" type="password" autocomplete="${m==="signup"?"new-password":"current-password"}" style="padding-right:56px"><button type="button" class="link" id="aEye" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:13px;text-decoration:none;color:var(--muted)">보기</button></div>`}
-        ${m==="signup" ? `<p class="hint" style="margin:8px 0 0">가입하신 핸드폰번호와 비밀번호로 다시 로그인하실 수 있습니다. 예약 확인을 위해 실제 사용하시는 번호를 입력해 주세요.</p>` : ""}
+        ${m==="signup" ? `<p class="hint" style="margin:8px 0 0">예약 확인 연락을 위해 실제 사용하시는 전화번호를 입력해 주세요. 비밀번호는 다음에 예약을 확인하러 들어오실 때 쓰입니다.</p>` : ""}
         <div class="err" id="aErr"></div>
-        <button class="main" type="submit" id="aBtn">${m==="signup" ? "가입하고 시작하기" : m==="reset" ? "담당자에게 초기화 요청하기" : "로그인"}</button>
+        <button class="main" type="submit" id="aBtn">${m==="signup" ? "입력하고 주문하기" : m==="reset" ? "담당자에게 초기화 요청하기" : "들어가기"}</button>
       </form>
       <div style="text-align:center;margin-top:12px">
-        ${m==="login" ? `<button class="link" data-m="reset" style="font-size:13px">비밀번호를 잊으셨나요?</button><br>` : ""}
-        ${(m==="admin"||m==="reset") ? `<button class="link" data-m="login">로그인으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
+        ${m==="signup" ? `<button class="link" data-m="login" style="font-size:13px">전에 입력하셨나요? 전화번호와 비밀번호로 들어가기</button><br>` : ""}
+        ${m==="login" ? `<button class="link" data-m="signup" style="font-size:13px">처음이신가요? 주문자 정보 입력</button><br>` : ""}
+        ${(m==="login"||m==="signup") ? `<button class="link" data-m="reset" style="font-size:13px;color:var(--muted)">비밀번호를 잊으셨나요?</button><br>` : ""}
+        ${(m==="admin"||m==="reset") ? `<button class="link" data-m="signup">처음 화면으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
       </div>
     </div>
     <p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p>
@@ -448,6 +464,8 @@ function renderAuth(app){
     ev.preventDefault(); const btn = $("#aBtn"); btn.disabled = true; $("#aErr").textContent = "";
     try {
       if(m==="reset"){ await requestReset($("#aName").value, $("#aPhone").value); openModal(`<h3>요청이 접수되었습니다</h3><p>담당자가 확인하면 비밀번호가 임시 비밀번호 <b>${TEMP_PW}</b>으로 초기화됩니다.<br>잠시 후 로그인 화면에서 핸드폰번호와 <b>${TEMP_PW}</b>으로 로그인해 주세요.</p><p class="hint">급하시면 ${esc(S.phone)} 로 연락 주세요.</p><div class="btns"><button id="mOk">확인</button></div>`); $("#mOk").onclick = () => { closeModal(); authMode = "login"; render(); }; return; }
+      if(m==="signup"){ remember($("#aName").value.trim(), digits($("#aPhone").value)); }
+      else if(m==="login"){ remember(remembered().name||"", digits($("#aPhone").value)); }
       if(m==="signup") await doSignup($("#aName").value, $("#aPhone").value, $("#aPw").value);
       else if(m==="admin") await doAdminLogin($("#aId").value, $("#aPw").value);
       else await doLogin($("#aPhone").value, $("#aPw").value);
@@ -465,7 +483,7 @@ function header(wide){
     <button class="ghost sm" id="logoutBtn">로그아웃</button>
   </div></header>`;
 }
-function bindHeader(){ const pb = $("#pwBtn"); if(pb) pb.onclick = pwChangeModal; $("#logoutBtn").onclick = async () => { if(await confirmModal("로그아웃", "로그아웃 하시겠습니까?")) { saveCartLocal(); authMode="login"; await DB.signOut(); } }; }
+function bindHeader(){ const pb = $("#pwBtn"); if(pb) pb.onclick = pwChangeModal; $("#logoutBtn").onclick = async () => { if(await confirmModal("로그아웃", "로그아웃 하시겠습니까?")) { saveCartLocal(); authMode="signup"; await DB.signOut(); } }; }
 
 function renderCustomer(app){
   const tabs = [["order","주문"],["cart","장바구니"],["done","예약완료"]];
