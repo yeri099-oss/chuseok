@@ -145,7 +145,6 @@ tr.paid td{background:#f4fbf6}
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /* ===================== 설정 ===================== */
 const FIREBASE_CONFIG = {
@@ -764,22 +763,117 @@ function renderListTable(){
     try { await DB.del(C.orders, o.id); await log("order_delete", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 예약 삭제 (${o.id})`); toast("삭제되었습니다"); } catch(e){ toast(authMsg(e)); }
   });
 }
-function exportExcel(){
+function excelData(){
   const rows = filteredRows();
   const names = MENU.map(m => m.name);
-  const head = ["접수","주문자명","전화번호","예약품목","수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","신청일시","입금확인일시","요청사항", ...names];
-  const data = rows.map(r => [r.source==="phone"?"전화":"앱", r.name, r.phoneText, r.itemsText.replace(/\n/g,", "), r.qtyTotal||0, r.total||0, fmtPickDate(r.pickupDate), r.pickupTime, r.depositor, r.paid?"입금완료":"미입금", r.status==="cancelled"?"취소":"예약", fmtDT(r.createdAt), fmtDT(r.paidAt), r.memo||"", ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : ""; })]);
+  const short = n => n.replace(/^자연양돈 |^유기농 |^달맞이 둥근 /,"").replace(/ 도시락$| 1kg$| 1\.5L$/,"");
+  const head = ["접수","주문자명","전화번호", ...names.map(short), "총 수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","요청사항","신청일시","입금확인일시","예약품목(요약)"];
+  const data = rows.map(r => [r.source==="phone"?"전화":"앱", r.name, r.phoneText, ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : null; }), r.qtyTotal||0, r.total||0, r.pickupDate ? fmtPickDate(r.pickupDate) : "미정", r.pickupTime || "미정", r.depositor||"", r.paid?"입금완료":"미입금", r.status==="cancelled"?"취소":"예약", r.memo||"", fmtDT(r.createdAt), fmtDT(r.paidAt), r.itemsText.replace(/\n/g,"\n")]);
+  // 품목별 집계 (픽업 날짜별)
+  const dates = [...(S.pickupDates||[])]; const dateLabels = dates.map(fmtPickDate);
+  const active = rows.filter(r => r.status !== "cancelled");
+  const sumHead = ["품목", ...dateLabels, "픽업 미정", "합계 수량", "입금완료 수량", "미입금 수량"];
+  const sumData = names.map(n => { const cnt = (pred) => active.filter(pred).reduce((s,r) => s + ((r.items||[]).find(i => i.name===n)||{qty:0}).qty, 0);
+    return [n, ...dates.map(d => cnt(r => r.pickupDate === d)), cnt(r => !dates.includes(r.pickupDate)), cnt(()=>true), cnt(r => r.paid), cnt(r => !r.paid)]; });
+  sumData.push(["합계", ...sumData.reduce((acc,row) => row.slice(1).map((v,i) => (acc[i]||0)+v), [])]);
+  return { rows, names, head, data, sumHead, sumData, nItems: names.length };
+}
+async function exportExcel(){
+  const d = excelData();
   const fname = `추석예약자명단_${new Date().toISOString().slice(0,10).replace(/-/g,"")}`;
-  if(window.XLSX){
-    const ws = XLSX.utils.aoa_to_sheet([head, ...data]);
-    ws["!cols"] = head.map((h,i) => ({ wch: i===3 ? 40 : Math.max(10, h.length*2+2) }));
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "예약자명단");
-    XLSX.writeFile(wb, fname + ".xlsx");
-  } else {
-    const csv = "﻿" + [head, ...data].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download = fname + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
+  try {
+    const bytes = buildXlsx(d);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})); a.download = fname + ".xlsx"; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
+    log("export", `엑셀 다운로드 ${d.rows.length}건`);
+  } catch(e){ console.error(e); toast("엑셀 생성에 실패했습니다"); }
+}
+/* ---- 외부 라이브러리 없이 xlsx(서식 포함) 만들기 ---- */
+const XML = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const colName = n => { let s = ""; while(n > 0){ const m = (n-1) % 26; s = String.fromCharCode(65+m) + s; n = Math.floor((n-1)/26); } return s; };
+// 스타일 번호: 0 기본 / 1 머리글(녹색) / 2 머리글(살구) / 3 테두리 왼쪽 / 4 테두리 가운데 / 5 수량 강조 / 6 금액 / 7 입금완료 / 8 미입금 / 9 취소행 / 10 줄바꿈 / 11 합계행 가운데 / 12 합계행 왼쪽
+const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>
+<fonts count="6"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><color rgb="FF2F8F5B"/><name val="맑은 고딕"/></font><font><sz val="11"/><color rgb="FFB3741F"/><name val="맑은 고딕"/></font><font><strike/><sz val="11"/><color rgb="FF999999"/><name val="맑은 고딕"/></font><font><b/><sz val="12"/><name val="맑은 고딕"/></font></fonts>
+<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBE5D6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF5E1"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD9D9D9"/></left><right style="thin"><color rgb="FFD9D9D9"/></right><top style="thin"><color rgb="FFD9D9D9"/></top><bottom style="thin"><color rgb="FFD9D9D9"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="13">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="3" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="0" borderId="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="5" fillId="5" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="5" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+function sheetXml(rows, widths, opts){
+  // rows: [[{v, s}], ...]  v: 숫자 또는 문자열, s: 스타일 번호
+  let x = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`;
+  if(opts.freeze) x += `<sheetViews><sheetView workbookViewId="0"><pane xSplit="${opts.freeze.x}" ySplit="${opts.freeze.y}" topLeftCell="${colName(opts.freeze.x+1)}${opts.freeze.y+1}" activePane="bottomRight" state="frozen"/></sheetView></sheetViews>`;
+  x += `<sheetFormatPr defaultRowHeight="20" customHeight="1"/><cols>${widths.map((w,i) => `<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")}</cols><sheetData>`;
+  rows.forEach((r, ri) => {
+    const rowHeight = ri === 0 ? 30 : (opts.rowHeight || 20);
+    x += `<row r="${ri+1}" ht="${rowHeight}" customHeight="1">`;
+    r.forEach((c, ci) => { const ref = colName(ci+1) + (ri+1); const st = c.s ? ` s="${c.s}"` : "";
+      if(c.v === null || c.v === undefined || c.v === "") x += `<c r="${ref}"${st}/>`;
+      else if(typeof c.v === "number") x += `<c r="${ref}"${st}><v>${c.v}</v></c>`;
+      else x += `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${XML(c.v)}</t></is></c>`; });
+    x += `</row>`;
+  });
+  x += `</sheetData>`;
+  if(opts.filter) x += `<autoFilter ref="A1:${colName(opts.filter)}${rows.length}"/>`;
+  x += `</worksheet>`;
+  return x;
+}
+function buildXlsx(d){
+  const n = d.nItems; const H = d.head.length;
+  const isCenter = ci => (ci >= 3 && ci < 3+n) || ci === 0 || ci === 3+n || ci === 3+n+5 || ci === 3+n+6;
+  const rows1 = [ d.head.map(v => ({v, s:1})) ];
+  d.data.forEach(r => { const cancelled = r[3+n+6] === "취소";
+    rows1.push(r.map((v, ci) => { if(cancelled) return { v, s:9 }; let st = isCenter(ci) ? 4 : 3;
+      if(ci >= 3 && ci < 3+n && v) st = 5; if(ci === 3+n+1) st = 6; if(ci === 3+n+5) st = v === "입금완료" ? 7 : 8; if(ci === H-1 || ci === 3+n+7) st = 10;
+      return { v, s:st }; })); });
+  const widths1 = [6, 10, 14, ...Array(n).fill(9), 8, 11, 13, 10, 10, 9, 6, 20, 16, 16, 44];
+  const rows2 = [ d.sumHead.map(v => ({v, s:2})) ];
+  d.sumData.forEach((r, i) => { const last = i === d.sumData.length - 1; rows2.push(r.map((v, ci) => ({ v, s: last ? (ci ? 11 : 12) : (ci ? 4 : 3) }))); });
+  const widths2 = [30, ...Array(d.sumHead.length - 1).fill(13)];
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="예약자명단" sheetId="1" r:id="rId1"/><sheet name="품목별집계" sheetId="2" r:id="rId2"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": STYLES_XML,
+    "xl/worksheets/sheet1.xml": sheetXml(rows1, widths1, { freeze:{x:3,y:1}, filter:H, rowHeight:22 }),
+    "xl/worksheets/sheet2.xml": sheetXml(rows2, widths2, { rowHeight:22 })
+  };
+  return zipStore(files);
+}
+// 압축 없이(store) zip 만들기
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for(let i = 0; i < 256; i++){ let c = i; for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[i] = c >>> 0; } return t; })();
+function crc32(u8){ let c = 0xFFFFFFFF; for(let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files){
+  const enc = new TextEncoder(); const parts = []; const central = []; let offset = 0;
+  const u16 = v => [v & 0xFF, (v >>> 8) & 0xFF]; const u32 = v => [v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF];
+  const dt = new Date(); const dosTime = ((dt.getHours() << 11) | (dt.getMinutes() << 5) | (dt.getSeconds() >> 1)) & 0xFFFF; const dosDate = (((dt.getFullYear() - 1980) << 9) | ((dt.getMonth() + 1) << 5) | dt.getDate()) & 0xFFFF;
+  for(const [name, content] of Object.entries(files)){
+    const nameB = enc.encode(name); const data = enc.encode(content); const crc = crc32(data);
+    const local = new Uint8Array([0x50,0x4B,0x03,0x04, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(dosTime), ...u16(dosDate), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nameB.length), ...u16(0), ...nameB]);
+    parts.push(local, data);
+    central.push(new Uint8Array([0x50,0x4B,0x01,0x02, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(dosTime), ...u16(dosDate), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nameB.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset), ...nameB]));
+    offset += local.length + data.length;
   }
-  log("export", `엑셀 다운로드 ${rows.length}건`);
+  const cdSize = central.reduce((s,c) => s + c.length, 0);
+  const end = new Uint8Array([0x50,0x4B,0x05,0x06, ...u16(0), ...u16(0), ...u16(central.length), ...u16(central.length), ...u32(cdSize), ...u32(offset), ...u16(0)]);
+  const all = [...parts, ...central, end]; const total = all.reduce((s,c) => s + c.length, 0);
+  const out = new Uint8Array(total); let pos = 0; for(const c of all){ out.set(c, pos); pos += c.length; }
+  return out;
 }
 
 function renderAdminMenu(body){
@@ -832,8 +926,9 @@ function renderAdminSettings(body){
       <p class="hint">고객이 로그인 화면에서 요청하면 여기에 뜹니다. 초기화를 누르면 그 번호의 비밀번호가 <b>${TEMP_PW}</b>으로 바뀌고(기존 예약은 그대로 유지), 고객은 ${TEMP_PW}으로 로그인한 뒤 새 비밀번호로 바꾸게 됩니다. 처리 후 고객에게 전화나 문자로 알려 주세요.</p>
       ${RESETS.length ? `<div class="tblwrap"><table style="min-width:500px"><thead><tr><th>성명</th><th>핸드폰</th><th>요청</th><th>상태</th><th></th></tr></thead><tbody>${[...RESETS].sort((a,b)=>(toDate(b.requestedAt)||0)-(toDate(a.requestedAt)||0)).map(r => `<tr><td>${esc(r.name)}</td><td>${esc(fmtPhone(r.phone))}</td><td>${fmtDT(r.requestedAt)}</td><td>${r.status==="requested" ? `<span class="pill wait">대기</span>` : `<span class="pill ok">초기화됨 ${fmtDT(r.doneAt)}</span>`}</td><td class="nol">${r.status==="requested" ? `<button class="sm" data-reset="${r.phone}" data-name="${esc(r.name)}">${TEMP_PW}으로 초기화</button> ` : ""}<button class="ghost sm" data-rdel="${r.id}">지우기</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="hint">요청이 없습니다.</p>`}</div>
     <div class="card"><h3>회원 목록</h3><p class="hint">가입한 고객 ${USERS.filter(u=>!u.replacedBy).length}명. 전화로 비밀번호 초기화를 요청받으면 여기서 바로 초기화할 수도 있습니다.</p>
-      <div class="tblwrap"><table style="min-width:500px"><thead><tr><th>성명</th><th>핸드폰</th><th>가입</th><th>최근 로그인</th><th></th></tr></thead><tbody>${[...USERS].filter(u=>!u.replacedBy).sort((a,b)=>(toDate(b.createdAt)||0)-(toDate(a.createdAt)||0)).map(u => `<tr><td>${esc(u.name)}</td><td>${esc(fmtPhone(u.phone))}</td><td>${fmtDT(u.createdAt)}</td><td>${fmtDT(u.lastLoginAt)}${u.tempPassword?` <span class="pill wait">임시비번</span>`:""}</td><td class="nol"><button class="ghost sm" data-reset="${u.phone}" data-name="${esc(u.name)}">비밀번호 초기화</button></td></tr>`).join("")}</tbody></table></div></div>`;
+      <div class="tblwrap"><table style="min-width:600px"><thead><tr><th>성명</th><th>핸드폰</th><th>가입</th><th>최근 로그인</th><th>예약</th><th></th></tr></thead><tbody>${[...USERS].filter(u=>!u.replacedBy).sort((a,b)=>(toDate(b.createdAt)||0)-(toDate(a.createdAt)||0)).map(u => { const n = ORDERS.filter(o => o.uid === u.id && o.status !== "cancelled").length; return `<tr><td>${esc(u.name)}</td><td>${esc(fmtPhone(u.phone))}</td><td>${fmtDT(u.createdAt)}</td><td>${fmtDT(u.lastLoginAt)}${u.tempPassword?` <span class="pill wait">임시비번</span>`:""}</td><td>${n ? n+"건" : `<span class="hint">없음</span>`}</td><td class="nol" style="white-space:nowrap"><button class="ghost sm" data-reset="${u.phone}" data-name="${esc(u.name)}">비밀번호 초기화</button> <button class="ghost sm" data-udel="${u.id}">삭제</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
   body.querySelectorAll("[data-reset]").forEach(b => b.onclick = () => adminResetPassword(b.dataset.reset, b.dataset.name));
+  body.querySelectorAll("[data-udel]").forEach(b => b.onclick = () => adminDeleteUser(b.dataset.udel));
   body.querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => { await DB.del(C.resets, b.dataset.rdel); });
   $("#saveS").onclick = async () => {
     const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, cancelUntil:$("#sCancelUntil").value, cancelPaid:$("#sCancelPaid").checked, pickupChangeUntil:$("#sPickUntil").value, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
@@ -910,6 +1005,28 @@ async function adminCreateCustomer(phone, name, silent){
     return uid;
   } catch(e){ toast(authMsg(e)); return null; }
 }
+async function adminDeleteUser(uid){
+  const u = USERS.find(x => x.id === uid); if(!u) return;
+  const myOrders = ORDERS.filter(o => o.uid === uid);
+  const ok = await new Promise(res => {
+    openModal(`<h3>회원 삭제</h3><p><b>${esc(u.name)}</b> (${esc(fmtPhone(u.phone))}) 님의 회원 정보를 삭제하시겠습니까?</p>
+      <p class="hint">삭제하면 이 번호는 다시 회원가입할 수 있고, 기존 비밀번호로는 로그인되지 않습니다.</p>
+      ${myOrders.length ? `<label class="row" style="gap:6px"><input type="checkbox" id="delOrders" style="width:18px">이 회원의 예약 ${myOrders.length}건도 함께 삭제 <span class="hint">(체크하지 않으면 예약은 명단에 남습니다)</span></label>` : `<p class="hint">이 회원의 예약은 없습니다.</p>`}
+      <div class="btns"><button class="ghost" id="mCancel">취소</button><button class="danger" id="mOk">삭제</button></div>`);
+    $("#mCancel").onclick = () => { closeModal(); res(false); };
+    $("#mOk").onclick = () => { const d = $("#delOrders") && $("#delOrders").checked; closeModal(); res({ delOrders: d }); };
+  });
+  if(!ok) return;
+  try {
+    if(ok.delOrders) for(const o of myOrders) await DB.del(C.orders, o.id);
+    await DB.del(C.users, uid);
+    for(const x of USERS.filter(x => x.replacedBy === uid || x.prevUid === uid)) await DB.del(C.users, x.id).catch(()=>{});
+    if(u.phone){ const info = await loginInfo(u.phone); await DB.set(C.login, u.phone, { v:(Number(info.v)||1)+1, deletedAt:DB.ts(), resetAt:null, createdByAdminAt:null }, true); }
+    const req = RESETS.find(r => r.phone === u.phone); if(req) await DB.del(C.resets, req.id).catch(()=>{});
+    await log("user_delete", `회원 삭제 ${u.name}(${fmtPhone(u.phone)})${ok.delOrders ? `, 예약 ${myOrders.length}건 삭제` : ""}`);
+    toast("회원 정보를 삭제했습니다");
+  } catch(e){ toast(authMsg(e)); }
+}
 async function adminResetPassword(phone, name){
   const p = digits(phone);
   const old = USERS.filter(u => u.phone === p && !u.replacedBy);
@@ -934,7 +1051,7 @@ async function adminResetPassword(phone, name){
     render();
   } catch(e){ toast(authMsg(e)); }
 }
-const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", user_delete:"회원삭제", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
 function renderAdminLog(body){
   const q = logQ.trim().toLowerCase();
   let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
