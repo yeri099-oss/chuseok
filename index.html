@@ -174,6 +174,7 @@ const APP_NAME = "chuseokOrder";              // 다른 앱 탭과 로그인 저
 const EMAIL_DOMAIN = "chuseok.goodbab.app";   // 전화번호 → 로그인용 이메일 변환
 const ADMIN_ID = "goodbab";
 const ADMIN_EMAIL = ADMIN_ID + "@" + EMAIL_DOMAIN;
+const STAFF_EMAIL = "staff@" + EMAIL_DOMAIN;   // 전화예약 입력 계정 (아이디는 관리자와 같은 goodbab, 비밀번호로 구분)
 const C = { users:"holidayApp_users", orders:"holidayApp_orders", menu:"holidayApp_menu", meta:"holidayApp_meta", logs:"holidayApp_logs", login:"holidayApp_login", resets:"holidayApp_resets" };
 const TEMP_PW = "123456";   // 관리자가 초기화할 때 쓰는 임시 비밀번호
 
@@ -187,7 +188,7 @@ const DEFAULT_MENU = [
 const DEFAULT_SETTINGS = {
   bank:"기업은행", account:"02409732104031", holder:"꽃밥이야기",
   deadline:"2026-09-20T20:00", orderOpen:true,
-  cancelUntil:"", cancelPaid:false, pickupChangeUntil:"",
+  cancelUntil:"", cancelPaid:false, pickupChangeUntil:"", lockAfterClose:true,
   pickupDates:["2026-09-23","2026-09-24"], timeStart:12, timeEnd:19,
   limitNote:"100세트 한정 선착순 마감 (예약 수량 외 추가 구입 불가)",
   phone:"02-3676-6262 / 02-766-6272",
@@ -294,7 +295,7 @@ function accountModal(total, depositor){
 /* ===================== 상태 ===================== */
 let user = null;          // {uid,email,displayName}
 let profile = null;       // holidayApp_users 문서
-let isAdmin = false;
+let isAdmin = false; let isStaff = false;   // isStaff: 전화예약 입력 계정(명단·전화예약만)
 let S = {...DEFAULT_SETTINGS};   // 설정
 let MENU = [];            // 품목
 let ORDERS = [];          // 내 주문 또는(관리자) 전체 주문
@@ -312,7 +313,7 @@ let adminQ = ""; let showCancelled = false; let logQ = "";
 let pendingSignup = null;
 
 function log(type, detail){
-  const d = { type, uid: user ? user.uid : null, name: isAdmin ? "관리자" : (profile ? profile.name : (pendingSignup?pendingSignup.name:"")), phone: profile ? profile.phone : (pendingSignup?pendingSignup.phone:""), detail: detail||"", at: DB.ts() };
+  const d = { type, uid: user ? user.uid : null, name: isStaff ? "전화예약" : isAdmin ? "관리자" : (profile ? profile.name : (pendingSignup?pendingSignup.name:"")), phone: profile ? profile.phone : (pendingSignup?pendingSignup.phone:""), detail: detail||"", at: DB.ts() };
   return DB.add(C.logs, d).catch(e => console.warn("log fail", e));
 }
 function saveCartLocal(){ try{ if(user) localStorage.setItem("chuseokCart_"+user.uid, JSON.stringify({cart, cartForm})); }catch(e){} }
@@ -320,26 +321,32 @@ function loadCartLocal(){ try{ const v = JSON.parse(localStorage.getItem("chuseo
 const cartItems = () => MENU.filter(m => cart[m.id] > 0).map(m => ({ id:m.id, name:m.name, price:Number(m.price)||0, qty:cart[m.id] }));
 const cartTotal = () => cartItems().reduce((s,i) => s + i.price*i.qty, 0);
 const cartQty = () => cartItems().reduce((s,i) => s + i.qty, 0);
-const pickupChangeClosed = () => { if(S.pickupChangeUntil){ const d = new Date(S.pickupChangeUntil); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
-const cancelClosed = () => { if(S.cancelUntil){ const d = new Date(S.cancelUntil); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
+const changesLocked = () => S.lockAfterClose !== false && orderClosed();   // 접수 마감 후에는 앱에서 변경·취소 불가(전화 문의만)
+const lockedUntilText = () => S.deadline && !isNaN(new Date(S.deadline)) ? fmtDT(S.deadline) : "";
+const pickupChangeClosed = () => { if(changesLocked()) return true; if(S.pickupChangeUntil){ const d = new Date(S.pickupChangeUntil); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
+const cancelClosed = () => { if(changesLocked()) return true; if(S.cancelUntil){ const d = new Date(S.cancelUntil); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
 const canCancel = o => o.status !== "cancelled" && (!o.paid || S.cancelPaid === true) && !cancelClosed();
-const cancelNote = o => cancelClosed() ? `취소 가능 기간(${fmtDT(S.cancelUntil)}까지)이 지났습니다. 변경은 매장(02-766-6272)으로 연락해 주세요.` : (o.paid ? "입금 확인이 끝난 예약의 취소나 변경은 매장(02-766-6272)으로 연락해 주세요." : "");
+const cancelNote = o => changesLocked() ? `` : cancelClosed() ? `취소 가능 기간(${fmtDT(S.cancelUntil)}까지)이 지났습니다. 변경은 매장(02-766-6272)으로 연락해 주세요.` : (o.paid ? "입금 확인이 끝난 예약의 취소나 변경은 매장(02-766-6272)으로 연락해 주세요." : "");
 const orderClosed = () => { if(S.orderOpen === false) return true; if(S.deadline){ const d = new Date(S.deadline); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
 
 /* ===================== 인증 흐름 ===================== */
 DB.onAuth(async u => {
   unsubs.forEach(f => f()); unsubs = [];
-  user = u; profile = null; isAdmin = false; ORDERS = []; LOGS = []; USERS = [];
+  user = u; profile = null; isAdmin = false; isStaff = false; ORDERS = []; LOGS = []; USERS = []; RESETS = [];
+  window.__lockShown = false;
   if(!u){ render(); return; }
-  isAdmin = (u.email === ADMIN_EMAIL);
+  isStaff = (u.email === STAFF_EMAIL);
+  isAdmin = (u.email === ADMIN_EMAIL) || isStaff;
   try {
     if(isAdmin){
-      profile = { name:"관리자" };
-      await ensureAdminSeed();
+      profile = { name: isStaff ? "전화예약 입력" : "관리자" };
+      if(!isStaff) await ensureAdminSeed();
       unsubs.push(DB.listen(C.orders, null, d => { ORDERS = d; if(tab==="list" && document.activeElement && document.activeElement.id==="q") renderListTable(); else render(); }, e => toast(authMsg(e))));
-      unsubs.push(DB.listen(C.logs, null, d => { LOGS = d; if(tab==="log") renderAdminLog($("#body")); }));
       unsubs.push(DB.listen(C.users, null, d => { USERS = d; if(tab==="settings") render(); }));
-      unsubs.push(DB.listen(C.resets, null, d => { RESETS = d; if(tab==="settings" || tab==="list") render(); }));
+      if(!isStaff){
+        unsubs.push(DB.listen(C.logs, null, d => { LOGS = d; if(tab==="log") renderAdminLog($("#body")); }));
+        unsubs.push(DB.listen(C.resets, null, d => { RESETS = d; if(tab==="settings" || tab==="list") render(); }));
+      }
       tab = "list";
     } else {
       profile = await DB.get(C.users, u.uid);
@@ -426,12 +433,14 @@ async function doAdminLogin(id, pw){
   try { await DB.signIn(ADMIN_EMAIL, pw); }
   catch(e){
     const c = e.code||"";
-    if(c.includes("user-not-found") || c.includes("invalid-credential") || c.includes("invalid-login")){
+    if(c.includes("user-not-found") || c.includes("invalid-credential") || c.includes("invalid-login") || c.includes("wrong-password")){
+      // 관리자 비밀번호가 아니면 전화예약 입력 계정으로 시도
+      try { await DB.signIn(STAFF_EMAIL, pw); setTimeout(() => log("staff_login", "전화예약 계정 로그인"), 500); return; }
+      catch(e3){}
       // 최초 1회: 관리자 계정이 아직 없으면 지금 입력한 비밀번호로 생성
       try { await DB.signUp(ADMIN_EMAIL, pw, "관리자"); toast("관리자 계정을 처음 만들었습니다"); }
-      catch(e2){ if((e2.code||"").includes("email-already-in-use")) throw "관리자 비밀번호가 맞지 않습니다."; throw e2; }
-    } else if(c.includes("wrong-password")) throw "관리자 비밀번호가 맞지 않습니다.";
-    else throw e;
+      catch(e2){ if((e2.code||"").includes("email-already-in-use")) throw "비밀번호가 맞지 않습니다."; throw e2; }
+    } else throw e;
   }
   setTimeout(() => log("admin_login", "관리자 로그인"), 500);
 }
@@ -486,7 +495,7 @@ function renderAuth(app){
 /* ---------- 고객 화면 ---------- */
 function header(wide){
   return `<header class="top"><div class="in ${wide?"wide":""}">
-    <div class="brand"><img src="${LOGO}" alt="" style="width:36px;height:36px;border-radius:8px"><div>꽃밥에피다<small>2026 추석 명절음식 예약${isAdmin?" · 관리자":""}</small></div></div>
+    <div class="brand"><img src="${LOGO}" alt="" style="width:36px;height:36px;border-radius:8px"><div>꽃밥에피다<small>2026 추석 명절음식 예약${isStaff?" · 전화예약 입력":isAdmin?" · 관리자":""}</small></div></div>
     <div class="spacer"></div>
     <div class="who"><b>${esc(profile.name||"")}</b>${profile.phone?"<br>"+esc(fmtPhone(profile.phone)):""}</div>
     ${isAdmin ? "" : `<button class="ghost sm" id="pwBtn">비밀번호 변경</button>`}
@@ -512,7 +521,7 @@ function renderCustomer(app){
   else renderDoneTab(wrap);
 }
 function pickupChangeModal(o){
-  if(pickupChangeClosed()) return toast("픽업 변경 가능 기간이 지났습니다");
+  if(pickupChangeClosed()) return toast(changesLocked() ? "마감 후에는 전화(02-766-6272)로만 변경 가능합니다" : "픽업 변경 가능 기간이 지났습니다");
   const slots = timeSlots(S);
   openModal(`<h3>픽업 날짜와 시간 변경</h3>
     <div class="emph">가지러 오시는 날 만듭니다. 바뀐 날짜와 시간을 정확히 골라 주세요.</div>
@@ -543,6 +552,7 @@ function renderOrderTab(body){
   body.innerHTML = `
     <div class="notice"><b>꽃밥에피다 2026 추석 명절음식 안내</b>\n${esc(S.notice)}</div>
     ${closed ? `<div class="emph">예약 접수가 마감되었습니다. 문의: ${esc(S.phone)}</div>` : `<div class="emph">${esc(S.limitNote)}</div>`}
+    <div class="card" style="border-color:#f0cfc4;background:#fff"><h3 style="color:var(--tc-dark)">꽃밥에서 사용하는 재료들</h3><div style="white-space:pre-line;font-size:14px;line-height:1.7">${esc(S.materials||"")}</div></div>
     <div class="bigmsg">입금완료 순으로 예약이 확정됩니다</div>
     <div class="menu">${MENU.filter(m => m.active !== false).map(m => `<div class="item">
       ${m.image ? `<img class="img" src="${m.image}" alt="">` : `<div class="img"></div>`}
@@ -553,7 +563,6 @@ function renderOrderTab(body){
       </div></div>`).join("")}
       ${MENU.length===0 ? `<div class="card hint">등록된 품목이 없습니다.</div>` : ""}
     </div>
-    <div class="card"><h3>꽃밥에서 사용하는 재료들</h3><div class="hint" style="white-space:pre-line">${esc(S.materials||"")}</div></div>
     <div class="cartbar"><div class="in"><div class="sum">${won(cartTotal())}<br><small>${cartQty()}개 선택</small></div><div class="spacer"></div><button id="goCart" ${cartQty()?"":"disabled"}>장바구니 보기 →</button></div></div>`;
   body.querySelectorAll(".qty button").forEach(b => b.onclick = () => { const id = b.dataset.id; cart[id] = Math.max(0, (cart[id]||0) + Number(b.dataset.d)); if(!cart[id]) delete cart[id]; saveCartLocal(); render(); });
   $("#goCart").onclick = () => { tab = "cart"; render(); window.scrollTo(0,0); };
@@ -656,7 +665,8 @@ async function submitOrder(){
 function renderDoneTab(body){
   const list = [...ORDERS].sort((a,b) => (toDate(b.createdAt)||0) - (toDate(a.createdAt)||0));
   if(!list.length){ body.innerHTML = `<div class="card" style="text-align:center;padding:30px"><div style="font-size:30px">🧺</div><p>아직 신청하신 예약이 없습니다.</p><button id="toOrder">주문하러 가기</button></div><p style="text-align:center"><button class="ghost sm" id="pwChange">비밀번호 변경</button></p>`; $("#toOrder").onclick = () => { tab="order"; render(); }; $("#pwChange").onclick = pwChangeModal; return; }
-  body.innerHTML = list.map(o => {
+  const lockBanner = changesLocked() ? `<div class="emph" style="border-color:#e0a1a1;background:#fdecec;color:#8a2c2c;font-size:15px">예약 접수가 ${esc(lockedUntilText())}에 마감되어 앱에서는 변경과 취소가 되지 않습니다.<br>변경이나 취소가 필요하시면 매장으로 전화 주세요. <b>02-766-6272</b></div>` : "";
+  body.innerHTML = lockBanner + list.map(o => {
     const cancelled = o.status === "cancelled";
     return `<div class="card">
       ${cancelled ? `<div class="status-cancel">취소된 예약입니다</div>` : o.paid ? `<div class="status-ok">✓ 예약이 완료되었습니다</div>` : `${o.customerPaid ? `<div class="status-claim">입금 확인 중입니다</div>` : ``}
@@ -673,10 +683,11 @@ function renderDoneTab(body){
       ${o.memo ? `<div class="row between"><span>요청사항</span><span>${esc(o.memo)}</span></div>` : ""}
       <div class="hint" style="margin-top:6px">신청 ${fmtDT(o.createdAt)}${o.paid&&o.paidAt ? " · 입금확인 "+fmtDT(o.paidAt) : ""}</div>
       ${cancelled ? "" : `<div class="row" style="margin-top:10px;gap:8px"><button class="ghost sm" data-img="${o.id}" style="flex:1">이미지로 저장/공유</button><button class="ghost sm" data-share="${o.id}" style="flex:1">링크 공유</button></div>`}
-      ${cancelled ? "" : `<div class="row between" style="margin-top:8px"><span class="hint">${pickupChangeClosed() ? `픽업 변경 가능 기간(${esc(fmtDT(S.pickupChangeUntil))}까지)이 지났습니다. 변경은 매장(02-766-6272)으로 연락해 주세요.` : (S.pickupChangeUntil ? `픽업 날짜와 시간은 ${esc(fmtDT(S.pickupChangeUntil))}까지 바꿀 수 있습니다.` : "")}</span>${pickupChangeClosed() ? "" : `<button class="ghost sm" data-pick="${o.id}">픽업 변경</button>`}</div>`}
-      ${cancelled ? "" : canCancel(o) ? `<div class="row between" style="margin-top:8px"><span class="hint">${S.cancelUntil ? `예약 취소는 ${esc(fmtDT(S.cancelUntil))}까지 가능합니다.` : ""}</span><button class="ghost sm" data-cancel="${o.id}">예약 취소</button></div>` : `<p class="hint" style="margin:8px 0 0">${esc(cancelNote(o))}</p>`}
+      ${cancelled || changesLocked() ? "" : `<div class="row between" style="margin-top:8px"><span class="hint">${pickupChangeClosed() ? `픽업 변경 가능 기간(${esc(fmtDT(S.pickupChangeUntil))}까지)이 지났습니다. 변경은 매장(02-766-6272)으로 연락해 주세요.` : (S.pickupChangeUntil ? `픽업 날짜와 시간은 ${esc(fmtDT(S.pickupChangeUntil))}까지 바꿀 수 있습니다.` : "")}</span>${pickupChangeClosed() ? "" : `<button class="ghost sm" data-pick="${o.id}">픽업 변경</button>`}</div>`}
+      ${cancelled || changesLocked() ? "" : canCancel(o) ? `<div class="row between" style="margin-top:8px"><span class="hint">${S.cancelUntil ? `예약 취소는 ${esc(fmtDT(S.cancelUntil))}까지 가능합니다.` : ""}</span><button class="ghost sm" data-cancel="${o.id}">예약 취소</button></div>` : `<p class="hint" style="margin:8px 0 0">${esc(cancelNote(o))}</p>`}
     </div>`; }).join("") + `<p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p><p style="text-align:center"><button class="ghost sm" id="pwChange">비밀번호 변경</button></p>`;
   $("#pwChange").onclick = pwChangeModal;
+  if(changesLocked() && !window.__lockShown){ window.__lockShown = true; openModal(`<h3>변경·취소는 전화로만 가능합니다</h3><p>예약 접수가 <b>${esc(lockedUntilText())}</b>에 마감되어 지금은 앱에서 예약 변경과 취소를 하실 수 없습니다.</p><p>변경이나 취소가 필요하시면 매장으로 전화 주세요.</p><div class="acct" style="border-style:solid"><div class="num" style="font-size:24px">02-766-6272</div><div class="hint">${esc(S.phone)}</div></div><div class="btns"><button id="mOk">확인</button></div>`); $("#mOk").onclick = closeModal; }
   body.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => toast((await copyText(S.account)) ? "계좌번호가 복사되었습니다" : "복사에 실패했습니다"));
   body.querySelectorAll("[data-claim]").forEach(c => c.onchange = async () => {
     const o = ORDERS.find(x => x.id === c.dataset.claim); if(!o) return; const on = c.checked;
@@ -688,7 +699,7 @@ function renderDoneTab(body){
   body.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const o = ORDERS.find(x => x.id === b.dataset.pick); if(o) pickupChangeModal(o); });
   body.querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => {
     const o = ORDERS.find(x => x.id === b.dataset.cancel); if(!o) return;
-    if(!canCancel(o)) return toast("취소 가능 기간이 지났습니다");
+    if(!canCancel(o)) return toast(changesLocked() ? "마감 후에는 전화(02-766-6272)로만 취소 가능합니다" : "취소 가능 기간이 지났습니다");
     if(!(await confirmModal("예약 취소", "이 예약을 취소하시겠습니까?<br><span class='hint'>이미 입금하셨다면 취소하지 마시고 매장으로 연락해 주세요.<br>매장 전화: <b>02-766-6272</b></span>", "취소하기", true))) return;
     try { await DB.update(C.orders, o.id, { status:"cancelled", cancelledAt:DB.ts(), updatedAt:DB.ts() }); await log("order_cancel", `예약 취소 ${won(o.total)} (${o.id})`); toast("예약이 취소되었습니다"); } catch(e){ toast(authMsg(e)); }
   });
@@ -749,7 +760,8 @@ async function shareOrderImage(o){
 /* ---------- 관리자 화면 ---------- */
 function renderAdmin(app){
   const pendingResets = RESETS.filter(r => r.status === "requested").length;
-  const tabs = [["list","예약자 명단"],["summary","집계 · 매출"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
+  const tabs = isStaff ? [["list","예약자 명단"],["summary","집계"]] : [["list","예약자 명단"],["summary","집계 · 매출"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
+  if(isStaff && !["list","summary"].includes(tab)) tab = "list";
   app.innerHTML = `<div class="topwrap">` + header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav></div><div class="wrap wide" id="body"></div>`;
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
@@ -777,6 +789,7 @@ function renderAdminList(body){
   const paid = all.filter(o => o.paid);
   const perItem = {}; all.forEach(o => (o.items||[]).forEach(i => { perItem[i.name] = (perItem[i.name]||0) + i.qty; }));
   body.innerHTML = `
+    ${isStaff ? `<div class="row" style="margin:12px 0;gap:10px;flex-wrap:wrap"><button id="addOrderBtnTop" style="padding:14px 22px;font-size:17px">+ 전화 예약 바로 입력</button><span class="hint">전화로 받은 예약을 이 버튼으로 바로 입력하세요. 주문자명만 있어도 저장되고, 나머지는 '수정'으로 채울 수 있습니다.</span></div>` : ""}
     ${pend.length ? `<div class="emph" style="display:flex;align-items:center;gap:8px"><span style="flex:1">비밀번호 초기화 요청 ${pend.length}건이 있습니다. (${pend.map(r => esc(r.name)).join(", ")})</span><button class="sm" id="goResets">처리하러 가기</button></div>` : ""}
     <div class="stats"><div class="stat">예약 건수<b>${all.length}</b></div><div class="stat">입금완료<b style="color:var(--ok)">${paid.length}</b></div><div class="stat">고객 입금표시<b style="color:#2b5aa6">${all.filter(o=>!o.paid&&o.customerPaid).length}</b></div><div class="stat">입금대기<b style="color:#b3741f">${all.length-paid.length}</b></div><div class="stat">취소<b style="color:#888">${ORDERS.length-all.length}</b></div><div class="stat">총 수량<b>${all.reduce((s,o)=>s+(o.qtyTotal||0),0)}</b></div><div class="stat">총 금액<b>${won(all.reduce((s,o)=>s+(o.total||0),0))}</b></div><div class="stat">입금액<b>${won(paid.reduce((s,o)=>s+(o.total||0),0))}</b></div></div>
     <div class="stats">${Object.entries(perItem).map(([n,q]) => `<div class="stat">${esc(n)}<b>${q}</b></div>`).join("") || ""}</div>
@@ -789,6 +802,7 @@ function renderAdminList(body){
   $("#showCancel").onchange = e => { showCancelled = e.target.checked; renderListTable(); };
   $("#xlsBtn").onclick = exportExcel;
   $("#addOrderBtn").onclick = () => orderFormModal(null);
+  const top = $("#addOrderBtnTop"); if(top) top.onclick = () => orderFormModal(null);
 }
 function renderListTable(){
   const area = $("#listArea"); if(!area) return;
@@ -800,7 +814,7 @@ function renderListTable(){
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:r.customerPaid?`<span class="pill" style="background:#e8f0fb;color:#2b5aa6" title="고객이 입금완료를 표시함 ${fmtDT(r.customerPaidAt)}">고객 입금표시</span>`:`<span class="pill wait">대기</span>`}</label>`}</td>
       <td>${fmtDT(r.createdAt)}</td><td style="white-space:pre-line;max-width:200px">${esc(r.memo||"")}</td>
       <td class="nol">${r.status==="cancelled"?`<span class="pill cancel">취소</span>`:r.paid?`<span class="pill ok">완료</span>`:`<span class="pill wait">입금대기</span>`}</td>
-      <td class="nol" style="white-space:nowrap">${(r.phone && !USERS.some(u => u.phone === r.phone && !u.replacedBy)) ? `<button class="ghost sm" data-acct="${r.id}" title="고객이 링크로 확인할 수 있게 계정 만들기">계정</button> ` : ""}<button class="ghost sm" data-edit="${r.id}">수정</button> ${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`} <button class="ghost sm" data-del="${r.id}">삭제</button></td></tr>`).join("")}
+      <td class="nol" style="white-space:nowrap">${(!isStaff && r.phone && !USERS.some(u => u.phone === r.phone && !u.replacedBy)) ? `<button class="ghost sm" data-acct="${r.id}" title="고객이 링크로 확인할 수 있게 계정 만들기">계정</button> ` : ""}<button class="ghost sm" data-edit="${r.id}">수정</button> ${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`} ${isStaff ? "" : `<button class="ghost sm" data-del="${r.id}">삭제</button>`}</td></tr>`).join("")}
       ${rows.length===0 ? `<tr><td colspan="${COLS.length+2}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
   const body = area;
   body.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; if(adminSort.key===k) adminSort.dir *= -1; else adminSort = {key:k, dir:1}; renderListTable(); });
@@ -1066,6 +1080,7 @@ function renderAdminSettings(body){
     <div class="card"><h3>예약 접수</h3>
       <label class="row" style="gap:6px"><input type="checkbox" id="sOpen" style="width:18px" ${S.orderOpen!==false?"checked":""}>예약 접수 열림 (끄면 즉시 마감 표시)</label>
       <label class="f">자동 마감 일시</label><input id="sDeadline" type="datetime-local" value="${esc(S.deadline||"")}">
+      <label class="row" style="gap:6px;margin-top:8px"><input type="checkbox" id="sLock" style="width:18px" ${S.lockAfterClose!==false?"checked":""}>접수 마감 후에는 앱에서 변경·취소 불가 (전화 문의만 가능하다는 안내창 표시)</label>
       <label class="f">고객 픽업 날짜·시간 변경 가능 마감 일시 <span style="font-weight:400">(비우면 기간 제한 없음)</span></label><input id="sPickUntil" type="datetime-local" value="${esc(S.pickupChangeUntil||"")}">
       <label class="f">고객 예약 취소 가능 마감 일시 <span style="font-weight:400">(비우면 기간 제한 없음)</span></label><input id="sCancelUntil" type="datetime-local" value="${esc(S.cancelUntil||"")}">
       <label class="row" style="gap:6px;margin-top:8px"><input type="checkbox" id="sCancelPaid" style="width:18px" ${S.cancelPaid?"checked":""}>입금 확인이 끝난 예약도 마감 전까지는 고객이 직접 취소 가능</label>
@@ -1078,16 +1093,21 @@ function renderAdminSettings(body){
     <div class="card"><h3>안내문 (주문 화면 상단)</h3><textarea id="sNotice" style="min-height:200px">${esc(S.notice)}</textarea>
       <label class="f">꽃밥에서 사용하는 재료들</label><textarea id="sMat">${esc(S.materials||"")}</textarea></div>
     <button id="saveS" style="width:100%;padding:13px">설정 저장</button>
-    <div class="card" style="margin-top:20px"><h3>비밀번호 초기화 요청</h3>
+    <div class="card" style="margin-top:20px"><h3>전화예약 입력 계정</h3>
+      <p class="hint">매장에서 전화 예약을 바로 입력하는 직원용 계정입니다. 로그인은 관리자와 같은 화면에서 아이디 <b>goodbab</b>에 이 계정의 비밀번호를 넣으면 되고, 예약자 명단(전화 예약 추가·수정·입금 체크·취소)과 집계만 볼 수 있습니다. 품목·설정·기록·삭제·계정 만들기는 관리자만 가능합니다.</p>
+      ${S.staffCreatedAt ? `<p><span class="pill ok">만들어짐</span> <span class="hint">${fmtDT(S.staffCreatedAt)} · 비밀번호를 바꾸려면 Firebase 콘솔 Authentication에서 ${STAFF_EMAIL} 계정을 삭제한 뒤 여기서 다시 만드세요.</span></p>` : `<div class="row" style="gap:8px;flex-wrap:wrap"><input id="staffPw" type="text" placeholder="이 계정의 비밀번호 (6자리 이상, 예: 20260801)" style="max-width:320px"><button id="staffMake">계정 만들기</button></div>`}
+    </div>
+    <div class="card"><h3>비밀번호 초기화 요청</h3>
       <p class="hint">고객이 로그인 화면에서 요청하면 여기에 뜹니다. 초기화를 누르면 그 번호의 비밀번호가 <b>${TEMP_PW}</b>으로 바뀌고(기존 예약은 그대로 유지), 고객은 ${TEMP_PW}으로 로그인한 뒤 새 비밀번호로 바꾸게 됩니다. 처리 후 고객에게 전화나 문자로 알려 주세요.</p>
       ${RESETS.length ? `<div class="tblwrap"><table style="min-width:500px"><thead><tr><th>성명</th><th>핸드폰</th><th>요청</th><th>상태</th><th></th></tr></thead><tbody>${[...RESETS].sort((a,b)=>(toDate(b.requestedAt)||0)-(toDate(a.requestedAt)||0)).map(r => `<tr><td>${esc(r.name)}</td><td>${esc(fmtPhone(r.phone))}</td><td>${fmtDT(r.requestedAt)}</td><td>${r.status==="requested" ? `<span class="pill wait">대기</span>` : `<span class="pill ok">초기화됨 ${fmtDT(r.doneAt)}</span>`}</td><td class="nol">${r.status==="requested" ? `<button class="sm" data-reset="${r.phone}" data-name="${esc(r.name)}">${TEMP_PW}으로 초기화</button> ` : ""}<button class="ghost sm" data-rdel="${r.id}">지우기</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="hint">요청이 없습니다.</p>`}</div>
     <div class="card"><h3>회원 목록</h3><p class="hint">가입한 고객 ${USERS.filter(u=>!u.replacedBy).length}명. 전화로 비밀번호 초기화를 요청받으면 여기서 바로 초기화할 수도 있습니다.</p>
       <div class="tblwrap"><table style="min-width:600px"><thead><tr><th>성명</th><th>핸드폰</th><th>가입</th><th>최근 로그인</th><th>예약</th><th></th></tr></thead><tbody>${[...USERS].filter(u=>!u.replacedBy).sort((a,b)=>(toDate(b.createdAt)||0)-(toDate(a.createdAt)||0)).map(u => { const n = ORDERS.filter(o => o.uid === u.id && o.status !== "cancelled").length; return `<tr><td>${esc(u.name)}</td><td>${esc(fmtPhone(u.phone))}</td><td>${fmtDT(u.createdAt)}</td><td>${fmtDT(u.lastLoginAt)}${u.tempPassword?` <span class="pill wait">임시비번</span>`:""}</td><td>${n ? n+"건" : `<span class="hint">없음</span>`}</td><td class="nol" style="white-space:nowrap"><button class="ghost sm" data-reset="${u.phone}" data-name="${esc(u.name)}">비밀번호 초기화</button> <button class="ghost sm" data-udel="${u.id}">삭제</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
   body.querySelectorAll("[data-reset]").forEach(b => b.onclick = () => adminResetPassword(b.dataset.reset, b.dataset.name));
+  const sm = $("#staffMake"); if(sm) sm.onclick = async () => { const pw = $("#staffPw").value.trim(); if(pw.length < 6) return toast("비밀번호는 6자리 이상으로 정해 주세요"); if(pw === ADMIN_ID) return toast("아이디와 같은 비밀번호는 쓸 수 없습니다"); try { await DB.adminCreateUser(STAFF_EMAIL, pw, "전화예약 입력"); await DB.set(C.meta, "settings", { staffCreatedAt: DB.ts() }, true); await log("staff_create", "전화예약 입력 계정 생성"); toast("전화예약 입력 계정을 만들었습니다"); } catch(e){ toast((e.code||"").includes("email-already-in-use") ? "이미 만들어진 계정입니다. 비밀번호를 바꾸려면 Firebase 콘솔에서 삭제 후 다시 만드세요." : authMsg(e)); } };
   body.querySelectorAll("[data-udel]").forEach(b => b.onclick = () => adminDeleteUser(b.dataset.udel));
   body.querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => { await DB.del(C.resets, b.dataset.rdel); });
   $("#saveS").onclick = async () => {
-    const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, cancelUntil:$("#sCancelUntil").value, cancelPaid:$("#sCancelPaid").checked, pickupChangeUntil:$("#sPickUntil").value, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
+    const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, cancelUntil:$("#sCancelUntil").value, cancelPaid:$("#sCancelPaid").checked, pickupChangeUntil:$("#sPickUntil").value, lockAfterClose:$("#sLock").checked, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
       pickupDates:$("#sDates").value.split(",").map(s=>s.trim()).filter(Boolean), timeStart:Number($("#sStart").value)||12, timeEnd:Number($("#sEnd").value)||19, notice:$("#sNotice").value, materials:$("#sMat").value, updatedAt:DB.ts() };
     if(data.timeEnd <= data.timeStart) return toast("종료 시는 시작 시보다 커야 합니다");
     try { await DB.set(C.meta, "settings", data, true); await log("settings_save", "설정 저장"); toast("설정이 저장되었습니다"); } catch(e){ toast(authMsg(e)); }
@@ -1109,7 +1129,7 @@ function orderFormModal(o){
     <label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:"")}" placeholder="비우면 주문자명과 동일">
     <label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":"")}">
     <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o&&o.paid?"checked":""}>입금 확인됨</label>
-    ${isNew ? `<label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="fAcct" style="width:18px">고객 계정도 만들기 (핸드폰번호 + 임시 비밀번호 ${TEMP_PW}, 고객이 링크로 예약 확인 가능)</label>` : ""}
+    ${isNew && !isStaff ? `<label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="fAcct" style="width:18px">고객 계정도 만들기 (핸드폰번호 + 임시 비밀번호 ${TEMP_PW}, 고객이 링크로 예약 확인 가능)</label>` : ""}
     <div class="err" id="fErr"></div>
     <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "추가" : "저장"}</button></div>`);
   const calc = () => { let t = 0; document.querySelectorAll("[data-q]").forEach(i => { const m = MENU.find(x => x.id===i.dataset.q); t += (Number(i.value)||0) * (Number(m.price)||0); }); $("#fTotal").textContent = won(t); return t; };
@@ -1207,7 +1227,7 @@ async function adminResetPassword(phone, name){
     render();
   } catch(e){ toast(authMsg(e)); }
 }
-const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", user_delete:"회원삭제", customer_paid:"고객입금표시", customer_paid_off:"입금표시해제", order_merge:"추가합산", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", user_delete:"회원삭제", customer_paid:"고객입금표시", customer_paid_off:"입금표시해제", order_merge:"추가합산", staff_login:"전화예약계정", staff_create:"계정생성", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
 function renderAdminLog(body){
   const q = logQ.trim().toLowerCase();
   let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
