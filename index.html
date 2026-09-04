@@ -174,6 +174,7 @@ const DEFAULT_MENU = [
 const DEFAULT_SETTINGS = {
   bank:"기업은행", account:"02409732104031", holder:"꽃밥이야기",
   deadline:"2026-09-20T20:00", orderOpen:true,
+  cancelUntil:"", cancelPaid:false,
   pickupDates:["2026-09-23","2026-09-24"], timeStart:12, timeEnd:19,
   limitNote:"100세트 한정 선착순 마감 (예약 수량 외 추가 구입 불가)",
   phone:"02-3676-6262 / 02-766-6272",
@@ -304,6 +305,9 @@ function loadCartLocal(){ try{ const v = JSON.parse(localStorage.getItem("chuseo
 const cartItems = () => MENU.filter(m => cart[m.id] > 0).map(m => ({ id:m.id, name:m.name, price:Number(m.price)||0, qty:cart[m.id] }));
 const cartTotal = () => cartItems().reduce((s,i) => s + i.price*i.qty, 0);
 const cartQty = () => cartItems().reduce((s,i) => s + i.qty, 0);
+const cancelClosed = () => { if(S.cancelUntil){ const d = new Date(S.cancelUntil); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
+const canCancel = o => o.status !== "cancelled" && (!o.paid || S.cancelPaid === true) && !cancelClosed();
+const cancelNote = o => cancelClosed() ? `취소 가능 기간(${fmtDT(S.cancelUntil)}까지)이 지났습니다. 변경은 매장(02-766-6272)으로 연락해 주세요.` : (o.paid ? "입금 확인이 끝난 예약의 취소나 변경은 매장(02-766-6272)으로 연락해 주세요." : "");
 const orderClosed = () => { if(S.orderOpen === false) return true; if(S.deadline){ const d = new Date(S.deadline); if(!isNaN(d) && Date.now() > d.getTime()) return true; } return false; };
 
 /* ===================== 인증 흐름 ===================== */
@@ -585,7 +589,7 @@ function renderDoneTab(body){
       ${o.memo ? `<div class="row between"><span>요청사항</span><span>${esc(o.memo)}</span></div>` : ""}
       <div class="hint" style="margin-top:6px">신청 ${fmtDT(o.createdAt)}${o.paid&&o.paidAt ? " · 입금확인 "+fmtDT(o.paidAt) : ""}</div>
       ${cancelled ? "" : `<div class="row" style="margin-top:10px;gap:8px"><button class="ghost sm" data-img="${o.id}" style="flex:1">이미지로 저장/공유</button><button class="ghost sm" data-share="${o.id}" style="flex:1">링크 공유</button></div>`}
-      ${(!cancelled && !o.paid) ? `<div style="text-align:right;margin-top:8px"><button class="ghost sm" data-cancel="${o.id}">예약 취소</button></div>` : ""}
+      ${cancelled ? "" : canCancel(o) ? `<div class="row between" style="margin-top:8px"><span class="hint">${S.cancelUntil ? `예약 취소는 ${esc(fmtDT(S.cancelUntil))}까지 가능합니다.` : ""}</span><button class="ghost sm" data-cancel="${o.id}">예약 취소</button></div>` : `<p class="hint" style="margin:8px 0 0">${esc(cancelNote(o))}</p>`}
     </div>`; }).join("") + `<p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p><p style="text-align:center"><button class="ghost sm" id="pwChange">비밀번호 변경</button></p>`;
   $("#pwChange").onclick = pwChangeModal;
   body.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => toast((await copyText(S.account)) ? "계좌번호가 복사되었습니다" : "복사에 실패했습니다"));
@@ -593,8 +597,9 @@ function renderDoneTab(body){
   body.querySelectorAll("[data-share]").forEach(b => b.onclick = () => { const o = ORDERS.find(x => x.id === b.dataset.share); if(o) shareOrderLink(o); });
   body.querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => {
     const o = ORDERS.find(x => x.id === b.dataset.cancel); if(!o) return;
+    if(!canCancel(o)) return toast("취소 가능 기간이 지났습니다");
     if(!(await confirmModal("예약 취소", "이 예약을 취소하시겠습니까?<br><span class='hint'>이미 입금하셨다면 취소하지 마시고 매장으로 연락해 주세요.<br>매장 전화: <b>02-766-6272</b></span>", "취소하기", true))) return;
-    try { await DB.update(C.orders, o.id, { status:"cancelled", updatedAt:DB.ts() }); await log("order_cancel", `예약 취소 ${won(o.total)} (${o.id})`); toast("예약이 취소되었습니다"); } catch(e){ toast(authMsg(e)); }
+    try { await DB.update(C.orders, o.id, { status:"cancelled", cancelledAt:DB.ts(), updatedAt:DB.ts() }); await log("order_cancel", `예약 취소 ${won(o.total)} (${o.id})`); toast("예약이 취소되었습니다"); } catch(e){ toast(authMsg(e)); }
   });
 }
 
@@ -783,6 +788,9 @@ function renderAdminSettings(body){
     <div class="card"><h3>예약 접수</h3>
       <label class="row" style="gap:6px"><input type="checkbox" id="sOpen" style="width:18px" ${S.orderOpen!==false?"checked":""}>예약 접수 열림 (끄면 즉시 마감 표시)</label>
       <label class="f">자동 마감 일시</label><input id="sDeadline" type="datetime-local" value="${esc(S.deadline||"")}">
+      <label class="f">고객 예약 취소 가능 마감 일시 <span style="font-weight:400">(비우면 기간 제한 없음)</span></label><input id="sCancelUntil" type="datetime-local" value="${esc(S.cancelUntil||"")}">
+      <label class="row" style="gap:6px;margin-top:8px"><input type="checkbox" id="sCancelPaid" style="width:18px" ${S.cancelPaid?"checked":""}>입금 확인이 끝난 예약도 마감 전까지는 고객이 직접 취소 가능</label>
+      <p class="hint" style="margin:4px 0 0">기본은 입금 확인 전 예약만 취소할 수 있습니다. 마감이 지나면 고객 화면의 취소 버튼이 사라지고 매장 연락 안내가 뜹니다.</p>
       <label class="f">한정 수량 안내 문구</label><input id="sLimit" value="${esc(S.limitNote)}">
       <label class="f">문의 전화</label><input id="sPhone" value="${esc(S.phone)}"></div>
     <div class="card"><h3>픽업</h3>
@@ -799,7 +807,7 @@ function renderAdminSettings(body){
   body.querySelectorAll("[data-reset]").forEach(b => b.onclick = () => adminResetPassword(b.dataset.reset, b.dataset.name));
   body.querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => { await DB.del(C.resets, b.dataset.rdel); });
   $("#saveS").onclick = async () => {
-    const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
+    const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, cancelUntil:$("#sCancelUntil").value, cancelPaid:$("#sCancelPaid").checked, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
       pickupDates:$("#sDates").value.split(",").map(s=>s.trim()).filter(Boolean), timeStart:Number($("#sStart").value)||12, timeEnd:Number($("#sEnd").value)||19, notice:$("#sNotice").value, materials:$("#sMat").value, updatedAt:DB.ts() };
     if(data.timeEnd <= data.timeStart) return toast("종료 시는 시작 시보다 커야 합니다");
     try { await DB.set(C.meta, "settings", data, true); await log("settings_save", "설정 저장"); toast("설정이 저장되었습니다"); } catch(e){ toast(authMsg(e)); }
