@@ -121,6 +121,16 @@ nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;b
 .stats{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
 .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px}
 .stat b{font-size:16px;color:var(--tc-dark);margin-left:4px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.kpi .l{font-size:13px;color:var(--muted)}
+.kpi .v{font-size:26px;font-weight:800;color:var(--ink);margin-top:2px;letter-spacing:-.5px}
+.kpi .s{font-size:12px;color:var(--muted);margin-top:2px}
+.kpi.main{background:var(--tc);border-color:var(--tc)}
+.kpi.main .l,.kpi.main .v,.kpi.main .s{color:#fff}
+.kpi.ok .v{color:var(--ok)} .kpi.wait .v{color:#b3741f} .kpi.claim .v{color:#2b5aa6}
+.bar{height:10px;background:#eee;border-radius:5px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ok)}
 .tblwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:12px}
 table{border-collapse:collapse;width:100%;font-size:13px;min-width:900px}
 th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
@@ -739,7 +749,7 @@ async function shareOrderImage(o){
 /* ---------- 관리자 화면 ---------- */
 function renderAdmin(app){
   const pendingResets = RESETS.filter(r => r.status === "requested").length;
-  const tabs = [["list","예약자 명단"],["summary","수량 집계"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
+  const tabs = [["list","예약자 명단"],["summary","집계 · 매출"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
   app.innerHTML = `<div class="topwrap">` + header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav></div><div class="wrap wide" id="body"></div>`;
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
@@ -831,7 +841,14 @@ function summaryData(){
     const other = active.filter(o => o.pickupDate === d && !slots.includes(o.pickupTime)); if(other.length) byTime.push({ date:d, time:"미정", orders: other.length, items: names.map(n => other.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0)) }); });
   const und = active.filter(o => !dates.includes(o.pickupDate)); if(und.length) byTime.push({ date:"", time:"미정", orders: und.length, items: names.map(n => und.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0)) });
   const dateTotals = dates.map(d => { const rows = active.filter(o => o.pickupDate === d); return { date:d, orders: rows.length, items: names.map(n => rows.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0)) }; });
-  return { names, dates, byItem, totalRow, byTime, dateTotals, activeCount: active.length, paidCount: active.filter(o=>o.paid).length };
+  const amt = arr => arr.reduce((s,o) => s + (o.total||0), 0);
+  const paidO = active.filter(o => o.paid), claimO = active.filter(o => !o.paid && o.customerPaid), waitO = active.filter(o => !o.paid && !o.customerPaid);
+  const priceOf = n => { const m = MENU.find(x => x.name === n); return Number(m && m.price) || 0; };
+  const itemRevenue = names.map(n => { const rev = active.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0,price:0}).qty * (((o.items||[]).find(i => i.name===n)||{}).price || priceOf(n)), 0); const paidRev = paidO.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0,price:0}).qty * (((o.items||[]).find(i => i.name===n)||{}).price || priceOf(n)), 0); return { name:n, price:priceOf(n), qty: q(()=>true, n), rev, paidRev }; });
+  const dateRevenue = dates.map(d => { const rows = active.filter(o => o.pickupDate === d); return { date:d, orders: rows.length, qty: rows.reduce((s,o)=>s+(o.qtyTotal||0),0), rev: amt(rows), paidRev: amt(rows.filter(o=>o.paid)) }; });
+  const undRows = active.filter(o => !dates.includes(o.pickupDate)); if(undRows.length) dateRevenue.push({ date:"", orders: undRows.length, qty: undRows.reduce((s,o)=>s+(o.qtyTotal||0),0), rev: amt(undRows), paidRev: amt(undRows.filter(o=>o.paid)) });
+  const money = { total: amt(active), paid: amt(paidO), claim: amt(claimO), wait: amt(waitO), orders: active.length, paidOrders: paidO.length, claimOrders: claimO.length, waitOrders: waitO.length, qty: active.reduce((s,o)=>s+(o.qtyTotal||0),0), cancelled: ORDERS.length - active.length, members: USERS.filter(u=>!u.replacedBy).length };
+  return { names, dates, byItem, totalRow, byTime, dateTotals, itemRevenue, dateRevenue, money, activeCount: active.length, paidCount: paidO.length };
 }
 function pickupOrderedList(){
   const dates = [...(S.pickupDates||[])]; const slots = timeSlots(S);
@@ -846,7 +863,22 @@ function renderAdminSummary(body){
   const d = summaryData(); const short = n => n.replace(/^자연양돈 |^유기농 |^달맞이 둥근 /,"").replace(/ 도시락$| 1kg$| 1\.5L$/,"");
   const cell = v => v ? `<b>${v}</b>` : `<span class="hint">0</span>`;
   body.innerHTML = `
-    <div class="toolbar"><span class="hint">취소된 예약은 제외한 수량입니다. 예약 ${d.activeCount}건 (입금완료 ${d.paidCount}건)</span><div class="spacer"></div><button class="ok" id="xlsBtn2">엑셀 다운로드</button></div>
+    <div class="toolbar"><span class="hint">취소된 예약은 제외한 수량과 금액입니다. 기준 시각 ${fmtDT(new Date())}</span><div class="spacer"></div><button class="ok" id="xlsBtn2">엑셀 다운로드</button></div>
+    <div class="kpis">
+      <div class="kpi main"><div class="l">총 예약 금액</div><div class="v">${won(d.money.total)}</div><div class="s">예약 ${d.money.orders}건 · 총 수량 ${d.money.qty}개</div></div>
+      <div class="kpi ok"><div class="l">입금 확인 금액</div><div class="v">${won(d.money.paid)}</div><div class="s">${d.money.paidOrders}건 · 전체의 ${d.money.total ? Math.round(d.money.paid/d.money.total*100) : 0}%</div><div class="bar"><i style="width:${d.money.total ? Math.round(d.money.paid/d.money.total*100) : 0}%"></i></div></div>
+      <div class="kpi claim"><div class="l">고객 입금표시 (확인 필요)</div><div class="v">${won(d.money.claim)}</div><div class="s">${d.money.claimOrders}건</div></div>
+      <div class="kpi wait"><div class="l">입금 대기 금액</div><div class="v">${won(d.money.wait)}</div><div class="s">${d.money.waitOrders}건</div></div>
+      <div class="kpi"><div class="l">총 수량</div><div class="v">${d.money.qty}<span style="font-size:14px;font-weight:500"> 개</span></div><div class="s">${d.names.length}개 품목</div></div>
+      <div class="kpi"><div class="l">예약 건수</div><div class="v">${d.money.orders}<span style="font-size:14px;font-weight:500"> 건</span></div><div class="s">취소 ${d.money.cancelled}건 · 회원 ${d.money.members}명</div></div>
+    </div>
+    <div class="card"><h3>품목별 매출</h3>
+      <div class="tblwrap"><table style="min-width:600px"><thead><tr><th>품목</th><th style="text-align:right">단가</th><th style="text-align:center">수량</th><th style="text-align:right">예약 금액</th><th style="text-align:right">입금 확인 금액</th><th>비중</th></tr></thead>
+      <tbody>${d.itemRevenue.map(r => `<tr><td><b>${esc(r.name)}</b></td><td style="text-align:right">${won(r.price)}</td><td style="text-align:center"><b>${r.qty}</b></td><td style="text-align:right"><b>${won(r.rev)}</b></td><td style="text-align:right;color:var(--ok)">${won(r.paidRev)}</td><td style="min-width:140px"><div class="row" style="gap:6px"><div class="bar" style="flex:1;margin:0"><i style="width:${d.money.total ? Math.round(r.rev/d.money.total*100) : 0}%;background:var(--tc)"></i></div><span class="hint" style="min-width:36px;text-align:right">${d.money.total ? Math.round(r.rev/d.money.total*100) : 0}%</span></div></td></tr>`).join("")}
+      <tr style="background:#f2f2f2;font-weight:700"><td>합계</td><td></td><td style="text-align:center">${d.money.qty}</td><td style="text-align:right">${won(d.money.total)}</td><td style="text-align:right;color:var(--ok)">${won(d.money.paid)}</td><td></td></tr></tbody></table></div></div>
+    <div class="card"><h3>픽업 날짜별 매출</h3>
+      <div class="tblwrap"><table style="min-width:500px"><thead><tr><th>픽업 날짜</th><th style="text-align:center">예약 건수</th><th style="text-align:center">수량</th><th style="text-align:right">예약 금액</th><th style="text-align:right">입금 확인 금액</th></tr></thead>
+      <tbody>${d.dateRevenue.map(r => `<tr><td><b>${r.date ? esc(fmtPickDate(r.date)) : "날짜 미정"}</b></td><td style="text-align:center">${r.orders}</td><td style="text-align:center">${r.qty}</td><td style="text-align:right"><b>${won(r.rev)}</b></td><td style="text-align:right;color:var(--ok)">${won(r.paidRev)}</td></tr>`).join("")}</tbody></table></div></div>
     <div class="card"><h3>품목별 총 수량 (찾으러 오시는 날짜별)</h3>
       <div class="tblwrap"><table style="min-width:600px"><thead><tr><th>품목</th>${d.dates.map(x => `<th style="text-align:center">${esc(fmtPickDate(x))}</th>`).join("")}<th style="text-align:center">날짜 미정</th><th style="text-align:center;background:#fbe5d6">전체 합계</th><th style="text-align:center">입금완료</th><th style="text-align:center">고객 입금표시</th><th style="text-align:center">미입금</th></tr></thead>
       <tbody>${d.byItem.map(r => `<tr><td><b>${esc(r.name)}</b></td>${r.dates.map(v => `<td style="text-align:center">${cell(v)}</td>`).join("")}<td style="text-align:center">${cell(r.undated)}</td><td style="text-align:center;background:#fff5e1;font-size:15px"><b>${r.total}</b></td><td style="text-align:center;color:var(--ok)">${r.paid}</td><td style="text-align:center;color:#2b5aa6">${r.claimed}</td><td style="text-align:center;color:#b3741f">${r.unpaid}</td></tr>`).join("")}
@@ -881,7 +913,11 @@ function excelData(){
   const pickHead = ["픽업 날짜","시간대","주문자명","전화번호","예약품목","수량","합계금액","입금자명","입금여부","요청사항"];
   const pickData = []; pickupOrderedList().forEach(g => { pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, `${g.orders.length}건 / ${g.orders.reduce((s,o)=>s+(o.qtyTotal||0),0)}개`, "", "", null, null, "", "", ""]);
     g.orders.forEach(o => pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, o.name, fmtPhone(o.phone), (o.items||[]).map(i => `${i.name} ${i.qty}`).join(", "), o.qtyTotal||0, o.total||0, o.depositor||"", o.paid?"입금완료":(o.customerPaid?"고객 입금표시":"미입금"), o.memo||""])); });
-  return { rows, names, head, data, sumHead, sumData, timeHead, timeData, pickHead, pickData, nItems: names.length };
+  const revHead = ["구분","단가","수량","예약 금액","입금 확인 금액","비중(%)"];
+  const revData = [["총 예약 금액", null, sd.money.qty, sd.money.total, sd.money.paid, 100], ["  입금 확인", null, null, sd.money.paid, null, sd.money.total ? Math.round(sd.money.paid/sd.money.total*100) : 0], ["  고객 입금표시(확인 필요)", null, null, sd.money.claim, null, sd.money.total ? Math.round(sd.money.claim/sd.money.total*100) : 0], ["  입금 대기", null, null, sd.money.wait, null, sd.money.total ? Math.round(sd.money.wait/sd.money.total*100) : 0], ["", null, null, null, null, null],
+    ["품목별", null, null, null, null, null], ...sd.itemRevenue.map(r => [r.name, r.price, r.qty, r.rev, r.paidRev, sd.money.total ? Math.round(r.rev/sd.money.total*100) : 0]), ["", null, null, null, null, null],
+    ["픽업 날짜별", null, null, null, null, null], ...sd.dateRevenue.map(r => [r.date ? fmtPickDate(r.date) : "날짜 미정", null, r.qty, r.rev, r.paidRev, sd.money.total ? Math.round(r.rev/sd.money.total*100) : 0])];
+  return { rows, names, head, data, sumHead, sumData, timeHead, timeData, pickHead, pickData, revHead, revData, nItems: names.length };
 }
 async function exportExcel(){
   const d = excelData();
@@ -955,16 +991,20 @@ function buildXlsx(d){
   const rows4 = [ d.pickHead.map(v => ({v, s:2})) ];
   d.pickData.forEach(r => { const isGroup = r[3] === "" && r[5] === null; rows4.push(r.map((v, ci) => ({ v, s: isGroup ? 12 : (ci === 5 ? 4 : ci === 6 ? 6 : ci === 8 ? (v === "입금완료" ? 7 : 8) : ci === 4 || ci === 9 ? 10 : 3) }))); });
   const widths4 = [14, 12, 12, 15, 44, 7, 11, 12, 12, 20];
+  const rows5 = [ d.revHead.map(v => ({v, s:1})) ];
+  d.revData.forEach(r => { const isHead = r[0] && r[3] === null && r[0] !== "" ; const isTotal = r[0] === "총 예약 금액"; rows5.push(r.map((v, ci) => ({ v, s: isHead ? 12 : isTotal ? (ci ? 11 : 12) : (ci === 1 || ci === 3 || ci === 4 ? 6 : ci === 0 ? 3 : 4) }))); });
+  const widths5 = [28, 12, 8, 16, 16, 10];
   const files = {
-    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet5.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
     "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="예약자명단" sheetId="1" r:id="rId1"/><sheet name="품목별집계" sheetId="2" r:id="rId2"/><sheet name="날짜시간대별" sheetId="3" r:id="rId4"/><sheet name="픽업순명단" sheetId="4" r:id="rId5"/></sheets></workbook>`,
-    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="예약자명단" sheetId="1" r:id="rId1"/><sheet name="품목별집계" sheetId="2" r:id="rId2"/><sheet name="날짜시간대별" sheetId="3" r:id="rId4"/><sheet name="픽업순명단" sheetId="4" r:id="rId5"/><sheet name="매출요약" sheetId="5" r:id="rId6"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/><Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet5.xml"/></Relationships>`,
     "xl/styles.xml": STYLES_XML,
     "xl/worksheets/sheet1.xml": sheetXml(rows1, widths1, { freeze:{x:3,y:1}, filter:H, rowHeight:22 }),
     "xl/worksheets/sheet2.xml": sheetXml(rows2, widths2, { rowHeight:22 }),
     "xl/worksheets/sheet3.xml": sheetXml(rows3, widths3, { rowHeight:22, freeze:{x:2,y:1} }),
-    "xl/worksheets/sheet4.xml": sheetXml(rows4, widths4, { rowHeight:22, freeze:{x:0,y:1} })
+    "xl/worksheets/sheet4.xml": sheetXml(rows4, widths4, { rowHeight:22, freeze:{x:0,y:1} }),
+    "xl/worksheets/sheet5.xml": sheetXml(rows5, widths5, { rowHeight:22 })
   };
   return zipStore(files);
 }
