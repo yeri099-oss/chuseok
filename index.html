@@ -35,7 +35,10 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-w
 .wrap{max-width:760px;margin:0 auto;padding:0 14px 90px}
 .wrap.wide{max-width:1200px}
 header.top{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line)}
-header.top .in{max-width:760px;margin:0 auto;padding:10px 14px;display:flex;align-items:center;gap:10px}
+header.top .in{max-width:760px;margin:0 auto;padding:8px 12px;display:flex;align-items:center;gap:8px}
+header.top button.sm{line-height:1.2;padding:6px 8px;white-space:nowrap}
+.mobile-who{display:none}
+@media(max-width:480px){.mobile-who{display:block}header.top .who{display:none}header.top .brand small{display:none}header.top .brand img{width:30px!important;height:30px!important}}
 header.top .in.wide{max-width:1200px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--tc);white-space:nowrap}
 .brand small{display:block;font-size:12px;color:var(--muted);font-weight:500;line-height:1.2}
@@ -157,7 +160,8 @@ const APP_NAME = "chuseokOrder";              // 다른 앱 탭과 로그인 저
 const EMAIL_DOMAIN = "chuseok.goodbab.app";   // 전화번호 → 로그인용 이메일 변환
 const ADMIN_ID = "goodbab";
 const ADMIN_EMAIL = ADMIN_ID + "@" + EMAIL_DOMAIN;
-const C = { users:"holidayApp_users", orders:"holidayApp_orders", menu:"holidayApp_menu", meta:"holidayApp_meta", logs:"holidayApp_logs" };
+const C = { users:"holidayApp_users", orders:"holidayApp_orders", menu:"holidayApp_menu", meta:"holidayApp_meta", logs:"holidayApp_logs", login:"holidayApp_login", resets:"holidayApp_resets" };
+const TEMP_PW = "123456";   // 관리자가 초기화할 때 쓰는 임시 비밀번호
 
 const DEFAULT_MENU = [
   { id:"m1", sort:1, active:true, name:"자연양돈 완자전 도시락", price:26000, desc:"35g 10개입 / 종이 도시락 포장\nNon GMO 사료로 키운 무항생제 자연양돈 돈육으로 지져낸 동그랑땡" },
@@ -189,6 +193,9 @@ if (!DEMO) {
     signUp: async (email,pw,name) => { const r = await auth.createUserWithEmailAndPassword(email,pw); if(name) await r.user.updateProfile({displayName:name}); return { uid:r.user.uid, email }; },
     signIn: async (email,pw) => { const r = await auth.signInWithEmailAndPassword(email,pw); return { uid:r.user.uid, email }; },
     signOut: () => auth.signOut(),
+    updatePassword: pw => auth.currentUser.updatePassword(pw),
+    // 관리자 세션을 유지한 채 다른 계정을 만들기 위해 별도 앱 인스턴스를 사용
+    adminCreateUser: async (email,pw,name) => { const app2 = firebase.apps.find(a => a.name==="chuseokWorker") || firebase.initializeApp(FIREBASE_CONFIG, "chuseokWorker"); const a2 = firebase.auth(app2); const r = await a2.createUserWithEmailAndPassword(email,pw); if(name) await r.user.updateProfile({displayName:name}); const uid = r.user.uid; await a2.signOut(); return uid; },
     ts: () => firebase.firestore.FieldValue.serverTimestamp(),
     get: async (col,id) => { const d = await fs.collection(col).doc(id).get(); return d.exists ? conv(d) : null; },
     set: (col,id,data,merge) => fs.collection(col).doc(id).set(data,{merge:!!merge}),
@@ -211,6 +218,8 @@ if (!DEMO) {
     signUp: async (email,pw,name) => { if(users[email]) throw {code:"auth/email-already-in-use"}; if(pw.length<6) throw {code:"auth/weak-password"}; users[email] = {pw, uid:"u_"+Math.random().toString(36).slice(2,9), displayName:name}; cur = {uid:users[email].uid,email,displayName:name}; emitAuth(); return cur; },
     signIn: async (email,pw) => { const u = users[email]; if(!u) throw {code:"auth/user-not-found"}; if(u.pw!==pw) throw {code:"auth/wrong-password"}; cur = {uid:u.uid,email,displayName:u.displayName}; emitAuth(); return cur; },
     signOut: async () => { cur = null; emitAuth(); },
+    updatePassword: async pw => { users[cur.email].pw = pw; },
+    adminCreateUser: async (email,pw,name) => { if(users[email]) throw {code:"auth/email-already-in-use"}; users[email] = {pw, uid:"u_"+Math.random().toString(36).slice(2,9), displayName:name}; return users[email].uid; },
     ts: () => ({__ts: Date.now()}),
     get: async (c,id) => col(c)[id] ? {id,...clone(col(c)[id])} : null,
     set: async (c,id,data,merge) => { col(c)[id] = merge ? {...(col(c)[id]||{}),...clone(data)} : clone(data); fire(c); },
@@ -234,7 +243,9 @@ const fmtDT = v => { const d = toDate(v); if(!d) return ""; const z = n => Strin
 const DAYS = ["일","월","화","수","목","금","토"];
 const fmtPickDate = s => { if(!s) return ""; const d = new Date(s+"T00:00:00"); if(isNaN(d)) return s; return `${d.getMonth()+1}월 ${d.getDate()}일(${DAYS[d.getDay()]})`; };
 const timeSlots = st => { const a = []; for(let h = Number(st.timeStart); h < Number(st.timeEnd); h++) a.push(`${h}시~${h+1}시`); return a; };
-const phoneToEmail = p => digits(p) + "@" + EMAIL_DOMAIN;
+const phoneToEmail = (p,v) => digits(p) + ((Number(v)||1) > 1 ? "." + Number(v) : "") + "@" + EMAIL_DOMAIN;
+// 번호별 로그인 계정 버전(비밀번호 초기화 시 1씩 증가). 로그인 전 조회라 공개 컬렉션.
+const loginInfo = async p => { try { return (await DB.get(C.login, digits(p))) || {}; } catch(e){ return {}; } };
 let toastT; const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); };
 async function copyText(t){ try { await navigator.clipboard.writeText(t); return true; } catch(e){ const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok = document.execCommand("copy"); }catch(_){} ta.remove(); return ok; } }
 const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 가입된 번호입니다. 로그인해 주세요."; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "번호 또는 비밀번호가 맞지 않습니다. 아직 가입 전이라면 회원가입을 눌러주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요)"; return "오류: " + ((e && (e.message||e.code)) || e); };
@@ -273,7 +284,7 @@ let S = {...DEFAULT_SETTINGS};   // 설정
 let MENU = [];            // 품목
 let ORDERS = [];          // 내 주문 또는(관리자) 전체 주문
 let LOGS = [];
-let USERS = [];
+let USERS = []; let RESETS = [];
 let cart = {};            // {menuId: qty}
 let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"" };
 let tab = "order";
@@ -306,7 +317,8 @@ DB.onAuth(async u => {
       await ensureAdminSeed();
       unsubs.push(DB.listen(C.orders, null, d => { ORDERS = d; if(tab==="list" && document.activeElement && document.activeElement.id==="q") renderListTable(); else render(); }, e => toast(authMsg(e))));
       unsubs.push(DB.listen(C.logs, null, d => { LOGS = d; if(tab==="log") renderAdminLog($("#body")); }));
-      unsubs.push(DB.listen(C.users, null, d => { USERS = d; }));
+      unsubs.push(DB.listen(C.users, null, d => { USERS = d; if(tab==="settings") render(); }));
+      unsubs.push(DB.listen(C.resets, null, d => { RESETS = d; if(tab==="settings" || tab==="list") render(); }));
       tab = "list";
     } else {
       profile = await DB.get(C.users, u.uid);
@@ -341,14 +353,36 @@ async function doSignup(name, phone, pw){
   if(!name) throw "성명을 입력해 주세요.";
   if(!/^01\d{8,9}$/.test(p)) throw "핸드폰번호를 정확히 입력해 주세요. (예: 010-1234-5678)";
   if(pw.length < 6) throw "비밀번호는 6자리 이상으로 정해 주세요.";
-  pendingSignup = { name, phone:p, email: phoneToEmail(p) };
+  const info = await loginInfo(p);
+  pendingSignup = { name, phone:p, email: phoneToEmail(p, info.v) };
   await DB.signUp(pendingSignup.email, pw, name);
 }
 async function doLogin(phone, pw){
   const p = digits(phone);
   if(!/^01\d{8,9}$/.test(p)) throw "핸드폰번호를 정확히 입력해 주세요.";
   if(!pw) throw "비밀번호를 입력해 주세요.";
-  await DB.signIn(phoneToEmail(p), pw);
+  const info = await loginInfo(p);
+  try { await DB.signIn(phoneToEmail(p, info.v), pw); }
+  catch(e){
+    const c = e.code||"";
+    if(info.resetAt && pw !== TEMP_PW && (c.includes("wrong-password")||c.includes("invalid-credential")||c.includes("invalid-login")))
+      throw `이 번호는 ${fmtDT(info.resetAt)}에 비밀번호가 임시 비밀번호 ${TEMP_PW}으로 초기화되었습니다. ${TEMP_PW}으로 로그인해 주세요.`;
+    throw e;
+  }
+}
+async function requestReset(name, phone){
+  name = name.trim(); const p = digits(phone);
+  if(!name) throw "성명을 입력해 주세요.";
+  if(!/^01\d{8,9}$/.test(p)) throw "핸드폰번호를 정확히 입력해 주세요.";
+  await DB.set(C.resets, p, { name, phone:p, status:"requested", requestedAt: DB.ts() });
+}
+async function changeMyPassword(pw){
+  if(pw.length < 6) throw "비밀번호는 6자리 이상으로 정해 주세요.";
+  if(pw === TEMP_PW) throw "임시 비밀번호와 다른 비밀번호로 정해 주세요.";
+  await DB.updatePassword(pw);
+  await DB.update(C.users, user.uid, { tempPassword:false, pwChangedAt:DB.ts() });
+  profile.tempPassword = false;
+  await log("pw_change", "비밀번호 변경");
 }
 async function doAdminLogin(id, pw){
   if(id.trim() !== ADMIN_ID) throw "관리자 아이디가 맞지 않습니다.";
@@ -380,25 +414,28 @@ function renderAuth(app){
   app.innerHTML = `<div class="auth">
     <div class="logo"><img src="${LOGO}" alt="" style="width:88px;height:88px;border-radius:20px"><h1>꽃밥에피다</h1><p>2026 추석 명절음식 예약</p></div>
     <div class="card">
-      ${m!=="admin" ? `<div class="seg"><button class="${m==="login"?"on":""}" data-m="login">로그인</button><button class="${m==="signup"?"on":""}" data-m="signup">회원가입</button></div>` : `<h3 style="margin:0 0 6px">관리자 로그인</h3>`}
+      ${m==="reset" ? `<h3 style="margin:0 0 6px">비밀번호 초기화 요청</h3><p class="hint" style="margin:0 0 6px">가입하신 성명과 핸드폰번호를 적어 주세요. 담당자가 확인하면 비밀번호가 임시 비밀번호 <b>${TEMP_PW}</b>으로 초기화됩니다. 잠시 후 ${TEMP_PW}으로 로그인하신 뒤 새 비밀번호로 바꿔 주세요.<br>급하시면 ${esc(S.phone)} 로 연락 주세요.</p>` : m!=="admin" ? `<div class="seg"><button class="${m==="login"?"on":""}" data-m="login">로그인</button><button class="${m==="signup"?"on":""}" data-m="signup">회원가입</button></div>` : `<h3 style="margin:0 0 6px">관리자 로그인</h3>`}
       <form id="authForm" autocomplete="on">
-        ${m==="signup" ? `<label class="f">성명</label><input id="aName" placeholder="주문하시는 분 성함" autocomplete="name">` : ""}
+        ${(m==="signup"||m==="reset") ? `<label class="f">성명</label><input id="aName" placeholder="가입하신 분 성함" autocomplete="name">` : ""}
         ${m==="admin" ? `<label class="f">관리자 아이디</label><input id="aId" autocomplete="username">` : `<label class="f">핸드폰번호</label><input id="aPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="tel">`}
-        <label class="f">비밀번호 ${m==="signup" ? "<span style='font-weight:400'>(6자리 이상)</span>" : ""}</label><input id="aPw" type="password" autocomplete="${m==="signup"?"new-password":"current-password"}">
+        ${m==="reset" ? "" : `<label class="f">비밀번호 ${m==="signup" ? "<span style='font-weight:400'>(6자리 이상)</span>" : ""}</label><div style="position:relative"><input id="aPw" type="password" autocomplete="${m==="signup"?"new-password":"current-password"}" style="padding-right:56px"><button type="button" class="link" id="aEye" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:13px;text-decoration:none;color:var(--muted)">보기</button></div>`}
         ${m==="signup" ? `<p class="hint" style="margin:8px 0 0">가입하신 핸드폰번호와 비밀번호로 다시 로그인하실 수 있습니다. 예약 확인을 위해 실제 사용하시는 번호를 입력해 주세요.</p>` : ""}
         <div class="err" id="aErr"></div>
-        <button class="main" type="submit" id="aBtn">${m==="signup" ? "가입하고 시작하기" : "로그인"}</button>
+        <button class="main" type="submit" id="aBtn">${m==="signup" ? "가입하고 시작하기" : m==="reset" ? "담당자에게 초기화 요청하기" : "로그인"}</button>
       </form>
       <div style="text-align:center;margin-top:12px">
-        ${m==="admin" ? `<button class="link" data-m="login">고객 로그인으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
+        ${m==="login" ? `<button class="link" data-m="reset" style="font-size:13px">비밀번호를 잊으셨나요?</button><br>` : ""}
+        ${(m==="admin"||m==="reset") ? `<button class="link" data-m="login">로그인으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
       </div>
     </div>
     <p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p>
   </div>`;
   app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { authMode = b.dataset.m; render(); });
+  const eye = $("#aEye"); if(eye) eye.onclick = () => { const i = $("#aPw"); i.type = i.type==="password" ? "text" : "password"; eye.textContent = i.type==="password" ? "보기" : "숨김"; };
   $("#authForm").onsubmit = async ev => {
     ev.preventDefault(); const btn = $("#aBtn"); btn.disabled = true; $("#aErr").textContent = "";
     try {
+      if(m==="reset"){ await requestReset($("#aName").value, $("#aPhone").value); openModal(`<h3>요청이 접수되었습니다</h3><p>담당자가 확인하면 비밀번호가 임시 비밀번호 <b>${TEMP_PW}</b>으로 초기화됩니다.<br>잠시 후 로그인 화면에서 핸드폰번호와 <b>${TEMP_PW}</b>으로 로그인해 주세요.</p><p class="hint">급하시면 ${esc(S.phone)} 로 연락 주세요.</p><div class="btns"><button id="mOk">확인</button></div>`); $("#mOk").onclick = () => { closeModal(); authMode = "login"; render(); }; return; }
       if(m==="signup") await doSignup($("#aName").value, $("#aPhone").value, $("#aPw").value);
       else if(m==="admin") await doAdminLogin($("#aId").value, $("#aPw").value);
       else await doLogin($("#aPhone").value, $("#aPw").value);
@@ -412,10 +449,11 @@ function header(wide){
     <div class="brand"><img src="${LOGO}" alt="" style="width:36px;height:36px;border-radius:8px"><div>꽃밥에피다<small>2026 추석 명절음식 예약${isAdmin?" · 관리자":""}</small></div></div>
     <div class="spacer"></div>
     <div class="who"><b>${esc(profile.name||"")}</b>${profile.phone?"<br>"+esc(fmtPhone(profile.phone)):""}</div>
+    ${isAdmin ? "" : `<button class="ghost sm" id="pwBtn">비밀번호 변경</button>`}
     <button class="ghost sm" id="logoutBtn">로그아웃</button>
   </div></header>`;
 }
-function bindHeader(){ $("#logoutBtn").onclick = async () => { if(await confirmModal("로그아웃", "로그아웃 하시겠습니까?")) { saveCartLocal(); authMode="login"; await DB.signOut(); } }; }
+function bindHeader(){ const pb = $("#pwBtn"); if(pb) pb.onclick = pwChangeModal; $("#logoutBtn").onclick = async () => { if(await confirmModal("로그아웃", "로그아웃 하시겠습니까?")) { saveCartLocal(); authMode="login"; await DB.signOut(); } }; }
 
 function renderCustomer(app){
   const tabs = [["order","주문"],["cart","장바구니"],["done","예약완료"]];
@@ -426,9 +464,17 @@ function renderCustomer(app){
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
   const body = $("#body");
-  if(tab==="order") renderOrderTab(body);
-  else if(tab==="cart") renderCartTab(body);
-  else renderDoneTab(body);
+  body.innerHTML = `<div class="mobile-who hint" style="padding:8px 2px 0"><b style="color:var(--ink)">${esc(profile.name||"")}</b>님 ${esc(fmtPhone(profile.phone||""))}</div>`;
+  if(profile.tempPassword){ body.innerHTML += `<div class="emph" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1">임시 비밀번호(${TEMP_PW})로 로그인하셨습니다. 새 비밀번호로 바꿔 주세요.</span><button class="sm" id="pwBanner">비밀번호 변경</button></div>`; $("#pwBanner").onclick = pwChangeModal; }
+  const wrap = document.createElement("div"); body.appendChild(wrap);
+  if(tab==="order") renderOrderTab(wrap);
+  else if(tab==="cart") renderCartTab(wrap);
+  else renderDoneTab(wrap);
+}
+function pwChangeModal(){
+  openModal(`<h3>비밀번호 변경</h3><label class="f">새 비밀번호 (6자리 이상)</label><input id="np1" type="password"><label class="f">새 비밀번호 확인</label><input id="np2" type="password"><div class="err" id="npErr"></div><div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">변경</button></div>`);
+  $("#mCancel").onclick = closeModal;
+  $("#mOk").onclick = async () => { const a = $("#np1").value, b = $("#np2").value; if(a !== b){ $("#npErr").textContent = "두 비밀번호가 서로 다릅니다."; return; } try { await changeMyPassword(a); closeModal(); toast("비밀번호가 변경되었습니다"); render(); } catch(e){ $("#npErr").textContent = typeof e==="string" ? e : ((e.code||"").includes("requires-recent-login") ? "보안을 위해 로그아웃 후 다시 로그인한 뒤 바꿔 주세요." : authMsg(e)); } };
 }
 
 function renderOrderTab(body){
@@ -522,7 +568,7 @@ async function submitOrder(){
 
 function renderDoneTab(body){
   const list = [...ORDERS].sort((a,b) => (toDate(b.createdAt)||0) - (toDate(a.createdAt)||0));
-  if(!list.length){ body.innerHTML = `<div class="card" style="text-align:center;padding:30px"><div style="font-size:30px">🧺</div><p>아직 신청하신 예약이 없습니다.</p><button id="toOrder">주문하러 가기</button></div>`; $("#toOrder").onclick = () => { tab="order"; render(); }; return; }
+  if(!list.length){ body.innerHTML = `<div class="card" style="text-align:center;padding:30px"><div style="font-size:30px">🧺</div><p>아직 신청하신 예약이 없습니다.</p><button id="toOrder">주문하러 가기</button></div><p style="text-align:center"><button class="ghost sm" id="pwChange">비밀번호 변경</button></p>`; $("#toOrder").onclick = () => { tab="order"; render(); }; $("#pwChange").onclick = pwChangeModal; return; }
   body.innerHTML = list.map(o => {
     const cancelled = o.status === "cancelled";
     return `<div class="card">
@@ -538,7 +584,8 @@ function renderDoneTab(body){
       ${o.memo ? `<div class="row between"><span>요청사항</span><span>${esc(o.memo)}</span></div>` : ""}
       <div class="hint" style="margin-top:6px">신청 ${fmtDT(o.createdAt)}${o.paid&&o.paidAt ? " · 입금확인 "+fmtDT(o.paidAt) : ""}</div>
       ${(!cancelled && !o.paid) ? `<div style="text-align:right;margin-top:8px"><button class="ghost sm" data-cancel="${o.id}">예약 취소</button></div>` : ""}
-    </div>`; }).join("") + `<p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p>`;
+    </div>`; }).join("") + `<p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p><p style="text-align:center"><button class="ghost sm" id="pwChange">비밀번호 변경</button></p>`;
+  $("#pwChange").onclick = pwChangeModal;
   body.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => toast((await copyText(S.account)) ? "계좌번호가 복사되었습니다" : "복사에 실패했습니다"));
   body.querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => {
     const o = ORDERS.find(x => x.id === b.dataset.cancel); if(!o) return;
@@ -549,7 +596,8 @@ function renderDoneTab(body){
 
 /* ---------- 관리자 화면 ---------- */
 function renderAdmin(app){
-  const tabs = [["list","예약자 명단"],["menu","품목 관리"],["settings","설정"],["log","기록"]];
+  const pendingResets = RESETS.filter(r => r.status === "requested").length;
+  const tabs = [["list","예약자 명단"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
   app.innerHTML = header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav><div class="wrap wide" id="body"></div>`;
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
@@ -572,10 +620,12 @@ function filteredRows(){
 }
 function renderAdminList(body){
   const rows = filteredRows();
+  const pend = RESETS.filter(r => r.status === "requested");
   const all = ORDERS.filter(o => o.status !== "cancelled");
   const paid = all.filter(o => o.paid);
   const perItem = {}; all.forEach(o => (o.items||[]).forEach(i => { perItem[i.name] = (perItem[i.name]||0) + i.qty; }));
   body.innerHTML = `
+    ${pend.length ? `<div class="emph" style="display:flex;align-items:center;gap:8px"><span style="flex:1">비밀번호 초기화 요청 ${pend.length}건이 있습니다. (${pend.map(r => esc(r.name)).join(", ")})</span><button class="sm" id="goResets">처리하러 가기</button></div>` : ""}
     <div class="stats"><div class="stat">예약 건수<b>${all.length}</b></div><div class="stat">입금완료<b style="color:var(--ok)">${paid.length}</b></div><div class="stat">입금대기<b style="color:#b3741f">${all.length-paid.length}</b></div><div class="stat">총 수량<b>${all.reduce((s,o)=>s+(o.qtyTotal||0),0)}</b></div><div class="stat">총 금액<b>${won(all.reduce((s,o)=>s+(o.total||0),0))}</b></div><div class="stat">입금액<b>${won(paid.reduce((s,o)=>s+(o.total||0),0))}</b></div></div>
     <div class="stats">${Object.entries(perItem).map(([n,q]) => `<div class="stat">${esc(n)}<b>${q}</b></div>`).join("") || ""}</div>
     <div class="toolbar"><input id="q" placeholder="검색" value="${esc(adminQ)}"><label class="row" style="font-size:13px;gap:4px"><input type="checkbox" id="showCancel" style="width:18px" ${showCancelled?"checked":""}>취소 포함</label><div class="spacer"></div><span class="hint" id="rowCount">${rows.length}건</span><button class="ok" id="xlsBtn">엑셀 다운로드</button></div>
@@ -583,6 +633,7 @@ function renderAdminList(body){
     <p class="hint">제목을 누르면 정렬(다시 누르면 역순)됩니다. 입금여부 칸을 체크하면 고객 화면에 '예약이 완료되었습니다'로 표시됩니다.</p>`;
   renderListTable();
   const q = $("#q"); q.oninput = () => { adminQ = q.value; renderListTable(); };
+  const gr = $("#goResets"); if(gr) gr.onclick = () => { tab = "settings"; render(); };
   $("#showCancel").onchange = e => { showCancelled = e.target.checked; renderListTable(); };
   $("#xlsBtn").onclick = exportExcel;
 }
@@ -672,8 +723,13 @@ function renderAdminSettings(body){
     <div class="card"><h3>안내문 (주문 화면 상단)</h3><textarea id="sNotice" style="min-height:200px">${esc(S.notice)}</textarea>
       <label class="f">꽃밥에서 사용하는 재료들</label><textarea id="sMat">${esc(S.materials||"")}</textarea></div>
     <button id="saveS" style="width:100%;padding:13px">설정 저장</button>
-    <div class="card" style="margin-top:20px"><h3>회원 목록</h3><p class="hint">가입한 고객 ${USERS.length}명 (비밀번호를 잊은 고객은 Firebase 콘솔 Authentication에서 해당 번호의 계정을 삭제하면 다시 가입할 수 있습니다.)</p>
-      <div class="tblwrap"><table style="min-width:400px"><thead><tr><th>성명</th><th>핸드폰</th><th>가입</th><th>최근 로그인</th></tr></thead><tbody>${[...USERS].sort((a,b)=>(toDate(b.createdAt)||0)-(toDate(a.createdAt)||0)).map(u => `<tr><td>${esc(u.name)}</td><td>${esc(fmtPhone(u.phone))}</td><td>${fmtDT(u.createdAt)}</td><td>${fmtDT(u.lastLoginAt)}</td></tr>`).join("")}</tbody></table></div></div>`;
+    <div class="card" style="margin-top:20px"><h3>비밀번호 초기화 요청</h3>
+      <p class="hint">고객이 로그인 화면에서 요청하면 여기에 뜹니다. 초기화를 누르면 그 번호의 비밀번호가 <b>${TEMP_PW}</b>으로 바뀌고(기존 예약은 그대로 유지), 고객은 ${TEMP_PW}으로 로그인한 뒤 새 비밀번호로 바꾸게 됩니다. 처리 후 고객에게 전화나 문자로 알려 주세요.</p>
+      ${RESETS.length ? `<div class="tblwrap"><table style="min-width:500px"><thead><tr><th>성명</th><th>핸드폰</th><th>요청</th><th>상태</th><th></th></tr></thead><tbody>${[...RESETS].sort((a,b)=>(toDate(b.requestedAt)||0)-(toDate(a.requestedAt)||0)).map(r => `<tr><td>${esc(r.name)}</td><td>${esc(fmtPhone(r.phone))}</td><td>${fmtDT(r.requestedAt)}</td><td>${r.status==="requested" ? `<span class="pill wait">대기</span>` : `<span class="pill ok">초기화됨 ${fmtDT(r.doneAt)}</span>`}</td><td class="nol">${r.status==="requested" ? `<button class="sm" data-reset="${r.phone}" data-name="${esc(r.name)}">${TEMP_PW}으로 초기화</button> ` : ""}<button class="ghost sm" data-rdel="${r.id}">지우기</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="hint">요청이 없습니다.</p>`}</div>
+    <div class="card"><h3>회원 목록</h3><p class="hint">가입한 고객 ${USERS.filter(u=>!u.replacedBy).length}명. 전화로 비밀번호 초기화를 요청받으면 여기서 바로 초기화할 수도 있습니다.</p>
+      <div class="tblwrap"><table style="min-width:500px"><thead><tr><th>성명</th><th>핸드폰</th><th>가입</th><th>최근 로그인</th><th></th></tr></thead><tbody>${[...USERS].filter(u=>!u.replacedBy).sort((a,b)=>(toDate(b.createdAt)||0)-(toDate(a.createdAt)||0)).map(u => `<tr><td>${esc(u.name)}</td><td>${esc(fmtPhone(u.phone))}</td><td>${fmtDT(u.createdAt)}</td><td>${fmtDT(u.lastLoginAt)}${u.tempPassword?` <span class="pill wait">임시비번</span>`:""}</td><td class="nol"><button class="ghost sm" data-reset="${u.phone}" data-name="${esc(u.name)}">비밀번호 초기화</button></td></tr>`).join("")}</tbody></table></div></div>`;
+  body.querySelectorAll("[data-reset]").forEach(b => b.onclick = () => adminResetPassword(b.dataset.reset, b.dataset.name));
+  body.querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => { await DB.del(C.resets, b.dataset.rdel); });
   $("#saveS").onclick = async () => {
     const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
       pickupDates:$("#sDates").value.split(",").map(s=>s.trim()).filter(Boolean), timeStart:Number($("#sStart").value)||12, timeEnd:Number($("#sEnd").value)||19, notice:$("#sNotice").value, materials:$("#sMat").value, updatedAt:DB.ts() };
@@ -682,7 +738,31 @@ function renderAdminSettings(body){
   };
 }
 
-const LOG_LABEL = { signup:"회원가입", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+async function adminResetPassword(phone, name){
+  const p = digits(phone);
+  const old = USERS.filter(u => u.phone === p && !u.replacedBy);
+  const ok = await confirmModal("비밀번호 초기화", `<b>${esc(name||"")}</b> (${esc(fmtPhone(p))}) 님의 비밀번호를 <b>${TEMP_PW}</b>으로 초기화하시겠습니까?<br><span class="hint">기존 예약과 기록은 그대로 유지됩니다. 고객에게 ${TEMP_PW}으로 로그인하라고 알려 주세요.</span>`, "초기화");
+  if(!ok) return;
+  try {
+    const info = await loginInfo(p);
+    const v = (Number(info.v)||1) + 1;
+    const email = phoneToEmail(p, v);
+    const newUid = await DB.adminCreateUser(email, TEMP_PW, name || (old[0] && old[0].name) || "");
+    const prof = { name: (old[0] && old[0].name) || name || "", phone:p, createdAt:(old[0] && old[0].createdAt) || DB.ts(), lastLoginAt:null, tempPassword:true, resetAt:DB.ts(), prevUid:(old[0] && old[0].id) || null };
+    await DB.set(C.users, newUid, prof);
+    for(const u of old) await DB.update(C.users, u.id, { replacedBy:newUid });
+    // 같은 번호의 기존 예약을 새 계정으로 연결
+    const orders = await DB.getAll(C.orders, {field:"phone",op:"==",value:p});
+    for(const o of orders) await DB.update(C.orders, o.id, { uid:newUid });
+    await DB.set(C.login, p, { v, resetAt:DB.ts() }, true);
+    const req = RESETS.find(r => r.phone === p);
+    if(req) await DB.update(C.resets, req.id, { status:"done", doneAt:DB.ts() });
+    await log("pw_reset", `${prof.name}(${fmtPhone(p)}) 비밀번호 초기화, 예약 ${orders.length}건 연결`);
+    toast(`${prof.name}님 비밀번호를 ${TEMP_PW}으로 초기화했습니다`);
+    render();
+  } catch(e){ toast(authMsg(e)); }
+}
+const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
 function renderAdminLog(body){
   const q = logQ.trim().toLowerCase();
   let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
