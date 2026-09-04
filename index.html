@@ -250,7 +250,7 @@ const phoneToEmail = (p,v) => digits(p) + ((Number(v)||1) > 1 ? "." + Number(v) 
 const loginInfo = async p => { try { return (await DB.get(C.login, digits(p))) || {}; } catch(e){ return {}; } };
 let toastT; const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); };
 async function copyText(t){ try { await navigator.clipboard.writeText(t); return true; } catch(e){ const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok = document.execCommand("copy"); }catch(_){} ta.remove(); return ok; } }
-const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 가입된 번호입니다. 로그인해 주세요."; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "번호 또는 비밀번호가 맞지 않습니다. 아직 가입 전이라면 회원가입을 눌러주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요)"; return "오류: " + ((e && (e.message||e.code)) || e); };
+const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 가입된 번호입니다. 로그인해 주세요. (매장에서 만들어 드린 계정이면 임시 비밀번호 " + TEMP_PW + ")"; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "번호 또는 비밀번호가 맞지 않습니다. 아직 가입 전이라면 회원가입을 눌러주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요)"; return "오류: " + ((e && (e.message||e.code)) || e); };
 
 /* ===================== 모달 ===================== */
 function openModal(html, opts={}){
@@ -370,8 +370,11 @@ async function doLogin(phone, pw){
   try { await DB.signIn(phoneToEmail(p, info.v), pw); }
   catch(e){
     const c = e.code||"";
-    if(info.resetAt && pw !== TEMP_PW && (c.includes("wrong-password")||c.includes("invalid-credential")||c.includes("invalid-login")))
+    const bad = c.includes("wrong-password")||c.includes("invalid-credential")||c.includes("invalid-login")||c.includes("user-not-found");
+    if(info.resetAt && pw !== TEMP_PW && bad)
       throw `이 번호는 ${fmtDT(info.resetAt)}에 비밀번호가 임시 비밀번호 ${TEMP_PW}으로 초기화되었습니다. ${TEMP_PW}으로 로그인해 주세요.`;
+    if(info.createdByAdminAt && pw !== TEMP_PW && bad)
+      throw `이 번호는 매장에서 전화 예약 시 만들어 드린 계정입니다. 임시 비밀번호 ${TEMP_PW}으로 로그인한 뒤 비밀번호를 바꿔 주세요.`;
     throw e;
   }
 }
@@ -691,7 +694,7 @@ function renderAdminList(body){
     <div class="stats">${Object.entries(perItem).map(([n,q]) => `<div class="stat">${esc(n)}<b>${q}</b></div>`).join("") || ""}</div>
     <div class="toolbar"><input id="q" placeholder="검색" value="${esc(adminQ)}"><label class="row" style="font-size:13px;gap:4px"><input type="checkbox" id="showCancel" style="width:18px" ${showCancelled?"checked":""}>취소 포함</label><div class="spacer"></div><span class="hint" id="rowCount">${rows.length}건</span><button id="addOrderBtn">+ 전화 예약 추가</button><button class="ok" id="xlsBtn">엑셀 다운로드</button></div>
     <div id="listArea"></div>
-    <p class="hint">제목을 누르면 정렬(다시 누르면 역순)됩니다. 입금여부 칸을 체크하면 고객 화면에 '예약이 완료되었습니다'로 표시됩니다.</p>`;
+    <p class="hint">제목을 누르면 정렬(다시 누르면 역순)됩니다. 입금여부 칸을 체크하면 고객 화면에 '예약이 완료되었습니다'로 표시됩니다. '계정' 버튼은 아직 가입하지 않은 전화 예약 고객의 계정을 임시 비밀번호 ${TEMP_PW}으로 만들어 링크로 예약을 확인할 수 있게 합니다.</p>`;
   renderListTable();
   const q = $("#q"); q.oninput = () => { adminQ = q.value; renderListTable(); };
   const gr = $("#goResets"); if(gr) gr.onclick = () => { tab = "settings"; render(); };
@@ -709,7 +712,7 @@ function renderListTable(){
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:`<span class="pill wait">대기</span>`}</label>`}</td>
       <td>${fmtDT(r.createdAt)}</td><td style="white-space:pre-line;max-width:200px">${esc(r.memo||"")}</td>
       <td class="nol">${r.status==="cancelled"?`<span class="pill cancel">취소</span>`:r.paid?`<span class="pill ok">완료</span>`:`<span class="pill wait">입금대기</span>`}</td>
-      <td class="nol" style="white-space:nowrap"><button class="ghost sm" data-edit="${r.id}">수정</button> ${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`} <button class="ghost sm" data-del="${r.id}">삭제</button></td></tr>`).join("")}
+      <td class="nol" style="white-space:nowrap">${(r.phone && !USERS.some(u => u.phone === r.phone && !u.replacedBy)) ? `<button class="ghost sm" data-acct="${r.id}" title="고객이 링크로 확인할 수 있게 계정 만들기">계정</button> ` : ""}<button class="ghost sm" data-edit="${r.id}">수정</button> ${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`} <button class="ghost sm" data-del="${r.id}">삭제</button></td></tr>`).join("")}
       ${rows.length===0 ? `<tr><td colspan="${COLS.length+2}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
   const body = area;
   body.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; if(adminSort.key===k) adminSort.dir *= -1; else adminSort = {key:k, dir:1}; renderListTable(); });
@@ -720,6 +723,7 @@ function renderListTable(){
     try { await DB.update(C.orders, o.id, { paid:on, paidAt: on ? DB.ts() : null, updatedAt: DB.ts() }); await log(on?"paid_on":"paid_off", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 입금확인 ${on?"체크":"해제"} (${o.id})`); toast(on ? `${o.name}님 입금확인 완료` : "입금확인 해제"); } catch(e){ toast(authMsg(e)); renderListTable(); }
   });
   body.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const o = ORDERS.find(x => x.id === b.dataset.edit); if(o) orderFormModal(o); });
+  body.querySelectorAll("[data-acct]").forEach(b => b.onclick = async () => { const o = ORDERS.find(x => x.id === b.dataset.acct); if(o){ await adminCreateCustomer(o.phone, o.name); renderListTable(); } });
   body.querySelectorAll("[data-cancelo]").forEach(b => b.onclick = async () => {
     const o = ORDERS.find(x => x.id === b.dataset.cancelo); if(!o) return;
     if(!(await confirmModal("예약 취소", `<b>${esc(o.name)}</b>님의 예약을 취소 처리하시겠습니까?<br><span class="hint">명단에는 '취소'로 남고(취소 포함 체크 시 표시), 고객 화면에도 '취소된 예약'으로 표시됩니다. 복구할 수 있습니다.</span>`, "취소 처리", true))) return;
@@ -829,6 +833,7 @@ function orderFormModal(o){
     <label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:"")}" placeholder="비우면 주문자명과 동일">
     <label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":"")}">
     <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o&&o.paid?"checked":""}>입금 확인됨</label>
+    ${isNew ? `<label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="fAcct" style="width:18px">고객 계정도 만들기 (핸드폰번호 + 임시 비밀번호 ${TEMP_PW}, 고객이 링크로 예약 확인 가능)</label>` : ""}
     <div class="err" id="fErr"></div>
     <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "추가" : "저장"}</button></div>`);
   const calc = () => { let t = 0; document.querySelectorAll("[data-q]").forEach(i => { const m = MENU.find(x => x.id===i.dataset.q); t += (Number(i.value)||0) * (Number(m.price)||0); }); $("#fTotal").textContent = won(t); return t; };
@@ -847,6 +852,7 @@ function orderFormModal(o){
         const u = phone ? USERS.find(x => x.phone === phone && !x.replacedBy) : null;
         Object.assign(data, { uid: u ? u.id : "phone:"+(phone || Date.now()), source:"phone", status:"active", createdAt:DB.ts(), paidAt: paid ? DB.ts() : null, createdBy:"admin" });
         const id = await DB.add(C.orders, data);
+        if($("#fAcct") && $("#fAcct").checked){ if(phone) { closeModal(); await adminCreateCustomer(phone, name, true); } else toast("핸드폰번호가 없어 계정은 만들지 못했습니다"); }
         await log("order_phone", `전화 예약 추가 ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime}${paid?" / 입금확인":""} (${id})`);
         toast("전화 예약이 추가되었습니다");
       } else {
@@ -858,6 +864,26 @@ function orderFormModal(o){
       closeModal();
     } catch(e){ $("#fErr").textContent = authMsg(e); }
   };
+}
+async function adminCreateCustomer(phone, name, silent){
+  const p = digits(phone); name = (name||"").trim();
+  if(!/^01\d{8,9}$/.test(p)) { toast("핸드폰번호가 있어야 계정을 만들 수 있습니다"); return null; }
+  const existing = USERS.find(u => u.phone === p && !u.replacedBy);
+  if(existing){ const orders = await DB.getAll(C.orders, {field:"phone",op:"==",value:p}); let n = 0; for(const o of orders) if(o.uid !== existing.id){ await DB.update(C.orders, o.id, { uid: existing.id }); n++; } if(!silent) toast(n ? `이미 가입된 번호입니다. 예약 ${n}건을 그 계정에 연결했습니다` : "이미 가입된 번호입니다 (예약도 이미 연결됨)"); return existing.id; }
+  if(!silent && !(await confirmModal("고객 계정 만들기", `<b>${esc(name)}</b> (${esc(fmtPhone(p))}) 님의 계정을 임시 비밀번호 <b>${TEMP_PW}</b>으로 만들고, 이 번호의 예약을 모두 연결합니다.<br><span class="hint">고객에게 "링크 접속 → 핸드폰번호 + ${TEMP_PW}으로 로그인"이라고 알려 주세요. 로그인하면 비밀번호를 바꾸라는 안내가 뜹니다.</span>`, "만들기"))) return null;
+  try {
+    const info = await loginInfo(p);
+    let v = Number(info.v)||1, uid;
+    try { uid = await DB.adminCreateUser(phoneToEmail(p, v), TEMP_PW, name); }
+    catch(e){ if((e.code||"").includes("email-already-in-use")){ v += 1; uid = await DB.adminCreateUser(phoneToEmail(p, v), TEMP_PW, name); } else throw e; }
+    await DB.set(C.users, uid, { name, phone:p, createdAt:DB.ts(), lastLoginAt:null, tempPassword:true, createdBy:"admin" });
+    await DB.set(C.login, p, { v, createdByAdminAt:DB.ts() }, true);
+    const orders = await DB.getAll(C.orders, {field:"phone",op:"==",value:p});
+    for(const o of orders) await DB.update(C.orders, o.id, { uid });
+    await log("account_create", `${name}(${fmtPhone(p)}) 고객 계정 생성(임시 비밀번호), 예약 ${orders.length}건 연결`);
+    toast(`${name}님 계정을 만들었습니다 (비밀번호 ${TEMP_PW})`);
+    return uid;
+  } catch(e){ toast(authMsg(e)); return null; }
 }
 async function adminResetPassword(phone, name){
   const p = digits(phone);
@@ -883,7 +909,7 @@ async function adminResetPassword(phone, name){
     render();
   } catch(e){ toast(authMsg(e)); }
 }
-const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
 function renderAdminLog(body){
   const q = logQ.trim().toLowerCase();
   let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
