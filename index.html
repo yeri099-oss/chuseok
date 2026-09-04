@@ -739,12 +739,12 @@ async function shareOrderImage(o){
 /* ---------- 관리자 화면 ---------- */
 function renderAdmin(app){
   const pendingResets = RESETS.filter(r => r.status === "requested").length;
-  const tabs = [["list","예약자 명단"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
+  const tabs = [["list","예약자 명단"],["summary","수량 집계"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
   app.innerHTML = `<div class="topwrap">` + header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav></div><div class="wrap wide" id="body"></div>`;
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
   const body = $("#body");
-  ({list:renderAdminList, menu:renderAdminMenu, settings:renderAdminSettings, log:renderAdminLog}[tab]||renderAdminList)(body);
+  ({list:renderAdminList, summary:renderAdminSummary, menu:renderAdminMenu, settings:renderAdminSettings, log:renderAdminLog}[tab]||renderAdminList)(body);
 }
 
 const COLS = [["source","접수"],["name","주문자명"],["phone","전화번호"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계금액"],["pickupDate","픽업날짜"],["pickupTime","픽업시간"],["depositor","입금자명"],["paid","입금여부"],["createdAt","신청일시"],["memo","요청사항"]];
@@ -818,20 +818,52 @@ function renderListTable(){
     try { await DB.del(C.orders, o.id); await log("order_delete", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 예약 삭제 (${o.id})`); toast("삭제되었습니다"); } catch(e){ toast(authMsg(e)); }
   });
 }
+function summaryData(){
+  const names = MENU.map(m => m.name);
+  const dates = [...(S.pickupDates||[])]; const slots = timeSlots(S);
+  const active = ORDERS.filter(o => o.status !== "cancelled");
+  const q = (pred, n) => active.filter(pred).reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0);
+  const byItem = names.map(n => ({ name:n, dates: dates.map(d => q(o => o.pickupDate === d, n)), undated: q(o => !dates.includes(o.pickupDate), n), total: q(()=>true, n), paid: q(o => o.paid, n), claimed: q(o => !o.paid && o.customerPaid, n), unpaid: q(o => !o.paid && !o.customerPaid, n) }));
+  const totalRow = { name:"합계", dates: dates.map((_,i) => byItem.reduce((s,r) => s + r.dates[i], 0)), undated: byItem.reduce((s,r)=>s+r.undated,0), total: byItem.reduce((s,r)=>s+r.total,0), paid: byItem.reduce((s,r)=>s+r.paid,0), claimed: byItem.reduce((s,r)=>s+r.claimed,0), unpaid: byItem.reduce((s,r)=>s+r.unpaid,0) };
+  // 날짜 × 시간대 × 품목
+  const byTime = [];
+  dates.forEach(d => { slots.forEach(t => { const rows = active.filter(o => o.pickupDate === d && o.pickupTime === t); if(!rows.length) return; byTime.push({ date:d, time:t, orders: rows.length, items: names.map(n => rows.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0)) }); });
+    const other = active.filter(o => o.pickupDate === d && !slots.includes(o.pickupTime)); if(other.length) byTime.push({ date:d, time:"미정", orders: other.length, items: names.map(n => other.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0)) }); });
+  const und = active.filter(o => !dates.includes(o.pickupDate)); if(und.length) byTime.push({ date:"", time:"미정", orders: und.length, items: names.map(n => und.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0)) });
+  const dateTotals = dates.map(d => { const rows = active.filter(o => o.pickupDate === d); return { date:d, orders: rows.length, items: names.map(n => rows.reduce((s,o) => s + ((o.items||[]).find(i => i.name===n)||{qty:0}).qty, 0)) }; });
+  return { names, dates, byItem, totalRow, byTime, dateTotals, activeCount: active.length, paidCount: active.filter(o=>o.paid).length };
+}
+function renderAdminSummary(body){
+  const d = summaryData(); const short = n => n.replace(/^자연양돈 |^유기농 |^달맞이 둥근 /,"").replace(/ 도시락$| 1kg$| 1\.5L$/,"");
+  const cell = v => v ? `<b>${v}</b>` : `<span class="hint">0</span>`;
+  body.innerHTML = `
+    <div class="toolbar"><span class="hint">취소된 예약은 제외한 수량입니다. 예약 ${d.activeCount}건 (입금완료 ${d.paidCount}건)</span><div class="spacer"></div><button class="ok" id="xlsBtn2">엑셀 다운로드</button></div>
+    <div class="card"><h3>품목별 총 수량 (찾으러 오시는 날짜별)</h3>
+      <div class="tblwrap"><table style="min-width:600px"><thead><tr><th>품목</th>${d.dates.map(x => `<th style="text-align:center">${esc(fmtPickDate(x))}</th>`).join("")}<th style="text-align:center">날짜 미정</th><th style="text-align:center;background:#fbe5d6">전체 합계</th><th style="text-align:center">입금완료</th><th style="text-align:center">고객 입금표시</th><th style="text-align:center">미입금</th></tr></thead>
+      <tbody>${d.byItem.map(r => `<tr><td><b>${esc(r.name)}</b></td>${r.dates.map(v => `<td style="text-align:center">${cell(v)}</td>`).join("")}<td style="text-align:center">${cell(r.undated)}</td><td style="text-align:center;background:#fff5e1;font-size:15px"><b>${r.total}</b></td><td style="text-align:center;color:var(--ok)">${r.paid}</td><td style="text-align:center;color:#2b5aa6">${r.claimed}</td><td style="text-align:center;color:#b3741f">${r.unpaid}</td></tr>`).join("")}
+      <tr style="background:#f2f2f2;font-weight:700"><td>합계</td>${d.totalRow.dates.map(v => `<td style="text-align:center">${v}</td>`).join("")}<td style="text-align:center">${d.totalRow.undated}</td><td style="text-align:center;background:#fbe5d6;font-size:15px">${d.totalRow.total}</td><td style="text-align:center;color:var(--ok)">${d.totalRow.paid}</td><td style="text-align:center;color:#2b5aa6">${d.totalRow.claimed}</td><td style="text-align:center;color:#b3741f">${d.totalRow.unpaid}</td></tr></tbody></table></div>
+      <p class="hint">전체 합계 = 날짜별 수량을 모두 더한 값 (재고 준비 기준). 입금완료/고객 입금표시/미입금은 전체 합계를 입금 상태로 나눈 것입니다.</p></div>
+    <div class="card"><h3>날짜별 합계</h3>
+      <div class="tblwrap"><table style="min-width:500px"><thead><tr><th>픽업 날짜</th><th style="text-align:center">예약 건수</th>${d.names.map(n => `<th style="text-align:center">${esc(short(n))}</th>`).join("")}<th style="text-align:center">총 수량</th></tr></thead>
+      <tbody>${d.dateTotals.map(r => `<tr><td><b>${esc(fmtPickDate(r.date))}</b></td><td style="text-align:center">${r.orders}</td>${r.items.map(v => `<td style="text-align:center">${cell(v)}</td>`).join("")}<td style="text-align:center;background:#fff5e1"><b>${r.items.reduce((a,b)=>a+b,0)}</b></td></tr>`).join("")}</tbody></table></div></div>
+    <div class="card"><h3>날짜 · 시간대별 수량 (조리 순서용)</h3>
+      <div class="tblwrap"><table style="min-width:600px"><thead><tr><th>픽업 날짜</th><th>시간대</th><th style="text-align:center">예약 건수</th>${d.names.map(n => `<th style="text-align:center">${esc(short(n))}</th>`).join("")}<th style="text-align:center">총 수량</th></tr></thead>
+      <tbody>${d.byTime.length ? d.byTime.map(r => `<tr><td>${r.date ? esc(fmtPickDate(r.date)) : `<span class="hint">날짜 미정</span>`}</td><td>${esc(r.time)}</td><td style="text-align:center">${r.orders}</td>${r.items.map(v => `<td style="text-align:center">${cell(v)}</td>`).join("")}<td style="text-align:center;background:#fff5e1"><b>${r.items.reduce((a,b)=>a+b,0)}</b></td></tr>`).join("") : `<tr><td colspan="${d.names.length+4}" class="hint" style="text-align:center;padding:20px">예약이 없습니다.</td></tr>`}</tbody></table></div></div>`;
+  $("#xlsBtn2").onclick = exportExcel;
+}
 function excelData(){
   const rows = filteredRows();
   const names = MENU.map(m => m.name);
   const short = n => n.replace(/^자연양돈 |^유기농 |^달맞이 둥근 /,"").replace(/ 도시락$| 1kg$| 1\.5L$/,"");
   const head = ["접수","주문자명","전화번호", ...names.map(short), "총 수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","요청사항","신청일시","입금확인일시","예약품목(요약)"];
   const data = rows.map(r => [r.source==="phone"?"전화":"앱", r.name, r.phoneText, ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : null; }), r.qtyTotal||0, r.total||0, r.pickupDate ? fmtPickDate(r.pickupDate) : "미정", r.pickupTime || "미정", r.depositor||"", r.paid?"입금완료":(r.customerPaid?"고객 입금표시":"미입금"), r.status==="cancelled"?"취소":"예약", r.memo||"", fmtDT(r.createdAt), fmtDT(r.paidAt), r.itemsText.replace(/\n/g,"\n")]);
-  // 품목별 집계 (픽업 날짜별)
-  const dates = [...(S.pickupDates||[])]; const dateLabels = dates.map(fmtPickDate);
-  const active = rows.filter(r => r.status !== "cancelled");
-  const sumHead = ["품목", ...dateLabels, "픽업 미정", "합계 수량", "입금완료 수량", "미입금 수량"];
-  const sumData = names.map(n => { const cnt = (pred) => active.filter(pred).reduce((s,r) => s + ((r.items||[]).find(i => i.name===n)||{qty:0}).qty, 0);
-    return [n, ...dates.map(d => cnt(r => r.pickupDate === d)), cnt(r => !dates.includes(r.pickupDate)), cnt(()=>true), cnt(r => r.paid), cnt(r => !r.paid)]; });
-  sumData.push(["합계", ...sumData.reduce((acc,row) => row.slice(1).map((v,i) => (acc[i]||0)+v), [])]);
-  return { rows, names, head, data, sumHead, sumData, nItems: names.length };
+  // 집계 시트 (전체 예약 기준, 취소 제외 — 검색 필터와 무관)
+  const sd = summaryData(); const dateLabels = sd.dates.map(fmtPickDate);
+  const sumHead = ["품목", ...dateLabels, "날짜 미정", "전체 합계", "입금완료", "고객 입금표시", "미입금"];
+  const sumData = [...sd.byItem, sd.totalRow].map(r => [r.name, ...r.dates, r.undated, r.total, r.paid, r.claimed, r.unpaid]);
+  const timeHead = ["픽업 날짜", "시간대", "예약 건수", ...names.map(short), "총 수량"];
+  const timeData = [...sd.dateTotals.map(r => [fmtPickDate(r.date), "날짜 합계", r.orders, ...r.items, r.items.reduce((a,b)=>a+b,0)]), ...sd.byTime.map(r => [r.date ? fmtPickDate(r.date) : "날짜 미정", r.time, r.orders, ...r.items, r.items.reduce((a,b)=>a+b,0)])];
+  return { rows, names, head, data, sumHead, sumData, timeHead, timeData, nItems: names.length };
 }
 async function exportExcel(){
   const d = excelData();
@@ -899,14 +931,18 @@ function buildXlsx(d){
   const rows2 = [ d.sumHead.map(v => ({v, s:2})) ];
   d.sumData.forEach((r, i) => { const last = i === d.sumData.length - 1; rows2.push(r.map((v, ci) => ({ v, s: last ? (ci ? 11 : 12) : (ci ? 4 : 3) }))); });
   const widths2 = [30, ...Array(d.sumHead.length - 1).fill(13)];
+  const rows3 = [ d.timeHead.map(v => ({v, s:2})) ];
+  d.timeData.forEach(r => { const isDate = r[1] === "날짜 합계"; rows3.push(r.map((v, ci) => ({ v, s: isDate ? (ci < 2 ? 12 : 11) : (ci < 2 ? 3 : 4) }))); });
+  const widths3 = [14, 12, 10, ...Array(d.names.length).fill(11), 10];
   const files = {
-    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
     "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="예약자명단" sheetId="1" r:id="rId1"/><sheet name="품목별집계" sheetId="2" r:id="rId2"/></sheets></workbook>`,
-    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="예약자명단" sheetId="1" r:id="rId1"/><sheet name="품목별집계" sheetId="2" r:id="rId2"/><sheet name="날짜시간대별" sheetId="3" r:id="rId4"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/></Relationships>`,
     "xl/styles.xml": STYLES_XML,
     "xl/worksheets/sheet1.xml": sheetXml(rows1, widths1, { freeze:{x:3,y:1}, filter:H, rowHeight:22 }),
-    "xl/worksheets/sheet2.xml": sheetXml(rows2, widths2, { rowHeight:22 })
+    "xl/worksheets/sheet2.xml": sheetXml(rows2, widths2, { rowHeight:22 }),
+    "xl/worksheets/sheet3.xml": sheetXml(rows3, widths3, { rowHeight:22, freeze:{x:2,y:1} })
   };
   return zipStore(files);
 }
