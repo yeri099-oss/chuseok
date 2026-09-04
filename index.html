@@ -597,7 +597,7 @@ function renderOrderTab(body){
     <div class="menu">${MENU.filter(m => m.active !== false).map(m => { const rem = remaining(m); const soldOut = rem !== null && rem <= 0; return `<div class="item ${soldOut?"soldout":""}">
       ${m.image ? `<img class="img" src="${m.image}" alt="">` : `<div class="img"></div>`}${soldOut ? `<div class="soldbadge">품절</div>` : ""}
       <div class="body"><div class="name">${esc(m.name)}</div><div class="desc">${esc(m.desc||"")}</div>
-        ${rem !== null && !soldOut && rem <= (Number(S.remainShowAt)||20) ? `<div class="rem ${rem <= 10 ? "low" : ""}">남은 수량 ${rem}개</div>` : soldOut ? `<div class="rem out">예약이 모두 찼습니다</div>` : ""}
+        ${rem !== null && !soldOut && rem <= (Number(m.showAt) || Number(S.remainShowAt) || 20) ? `<div class="rem ${rem <= 10 ? "low" : ""}">남은 수량 ${rem}개</div>` : soldOut ? `<div class="rem out">예약이 모두 찼습니다</div>` : ""}
         <div class="row between" style="margin-top:auto"><div class="price">${won(m.price)}</div>
           <div class="qty"><button data-d="-1" data-id="${m.id}" ${closed||soldOut?"disabled":""}>−</button><span id="q_${m.id}">${cart[m.id]||0}</span><button data-d="1" data-id="${m.id}" ${closed||soldOut?"disabled":""}>+</button></div></div>
         ${cart[m.id]>0 ? `<div class="hint" style="text-align:right">${cart[m.id]}개 = <b>${won(cart[m.id]*m.price)}</b></div>` : ""}
@@ -1124,7 +1124,7 @@ function renderAdminMenu(body){
   body.innerHTML = `<p class="hint">품목 이름, 금액, 설명, 사진을 수정하고 저장을 누르세요. 사진은 자동으로 줄여서 저장됩니다. '판매'를 끄면 고객 화면에서 숨겨집니다.</p>
     ${MENU.map(m => `<div class="card" data-mid="${m.id}"><div class="adm-item">
       <div>${m.image ? `<img src="${m.image}" alt="">` : `<div class="noimg">사진 없음</div>`}<input type="file" accept="image/*" data-img="${m.id}" style="margin-top:6px;font-size:12px;padding:4px">${m.image?`<button class="ghost sm" data-rmimg="${m.id}" style="margin-top:4px">사진 삭제</button>`:""}</div>
-      <div><label class="f">품목명</label><input data-f="name" value="${esc(m.name)}"><div class="row" style="gap:10px"><div style="flex:1"><label class="f">금액(원)</label><input data-f="price" type="number" inputmode="numeric" value="${m.price}"></div><div style="flex:1"><label class="f">한정 수량 <span style="font-weight:400">(비우면 무제한)</span></label><input data-f="limit" type="number" inputmode="numeric" value="${m.limit||""}" placeholder="예: 100"><div class="hint" style="margin-top:2px">예약됨 ${Number(STOCK[m.id])||0}개${m.limit ? ` / 남음 ${remaining(m)}개` : ""}</div></div></div><label class="f">설명(구성, 원재료)</label><textarea data-f="desc">${esc(m.desc||"")}</textarea>
+      <div><label class="f">품목명</label><input data-f="name" value="${esc(m.name)}"><div class="row" style="gap:10px"><div style="flex:1"><label class="f">금액(원)</label><input data-f="price" type="number" inputmode="numeric" value="${m.price}"></div><div style="flex:1"><label class="f">판매 가능 수량 <span style="font-weight:400">(비우면 무제한)</span></label><input data-f="limit" type="number" inputmode="numeric" value="${m.limit||""}" placeholder="예: 100"><div class="hint" style="margin-top:2px">예약됨 ${Number(STOCK[m.id])||0}개${m.limit ? ` / 남음 ${remaining(m)}개` : ""}</div></div><div style="flex:1"><label class="f">남은 수량 표시 시작 <span style="font-weight:400">(개)</span></label><input data-f="showAt" type="number" inputmode="numeric" value="${m.showAt||""}" placeholder="비우면 ${Number(S.remainShowAt)||20}"><div class="hint" style="margin-top:2px">남은 수량이 이 값 이하일 때부터 고객에게 표시</div></div></div><label class="f">설명(구성, 원재료)</label><textarea data-f="desc">${esc(m.desc||"")}</textarea>
         <div class="row" style="margin-top:8px;flex-wrap:wrap"><label class="row" style="gap:4px;font-size:14px"><input type="checkbox" data-f="active" style="width:18px" ${m.active!==false?"checked":""}>판매</label><label class="row" style="gap:4px;font-size:14px">순서 <input data-f="sort" type="number" value="${m.sort||0}" style="width:70px"></label><div class="spacer"></div><button class="ghost sm danger" style="color:#fff" data-delm="${m.id}">삭제</button><button class="sm" data-save="${m.id}">저장</button></div></div>
     </div></div>`).join("")}
     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="ghost" id="addMenu">+ 품목 추가</button><button class="ghost" id="resetMenu">기본 5개 품목 불러오기</button><button class="ghost" id="recalcStock">예약 수량 다시 계산</button></div>
@@ -1134,7 +1134,7 @@ function renderAdminMenu(body){
   body.querySelectorAll("[data-rmimg]").forEach(b => b.onclick = async () => { await DB.update(C.menu, b.dataset.rmimg, { image: null }); toast("사진 삭제"); });
   body.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
     const card = b.closest(".card"); const id = b.dataset.save; const g = f => card.querySelector(`[data-f="${f}"]`);
-    const data = { name:g("name").value.trim(), price:Number(g("price").value)||0, limit:Number(g("limit").value)||0, desc:g("desc").value, active:g("active").checked, sort:Number(g("sort").value)||0, updatedAt:DB.ts() };
+    const data = { name:g("name").value.trim(), price:Number(g("price").value)||0, limit:Number(g("limit").value)||0, showAt:Number(g("showAt").value)||0, desc:g("desc").value, active:g("active").checked, sort:Number(g("sort").value)||0, updatedAt:DB.ts() };
     if(!data.name) return toast("품목명을 입력해 주세요");
     if(pending[id]) data.image = pending[id];
     try { await DB.set(C.menu, id, data, true); await log("menu_save", `품목 저장: ${data.name} ${won(data.price)}`); toast("저장되었습니다"); } catch(e){ toast(authMsg(e)); }
@@ -1161,7 +1161,7 @@ function renderAdminSettings(body){
       <label class="f">고객 예약 취소 가능 마감 일시 <span style="font-weight:400">(비우면 기간 제한 없음)</span></label><input id="sCancelUntil" type="datetime-local" value="${esc(S.cancelUntil||"")}">
       <label class="row" style="gap:6px;margin-top:8px"><input type="checkbox" id="sCancelPaid" style="width:18px" ${S.cancelPaid?"checked":""}>입금 확인이 끝난 예약도 마감 전까지는 고객이 직접 취소 가능</label>
       <p class="hint" style="margin:4px 0 0">기본은 입금 확인 전 예약만 취소할 수 있습니다. 마감이 지나면 고객 화면의 취소 버튼이 사라지고 매장 연락 안내가 뜹니다.</p>
-      <label class="f">남은 수량 표시 시작 (개)</label><input id="sRemainAt" type="number" value="${Number(S.remainShowAt)||20}" style="max-width:160px"><p class="hint" style="margin:2px 0 0">한정 수량 품목의 남은 수량이 이 값 이하로 내려갈 때부터 고객 화면에 "남은 수량 n개"가 보입니다. 그 전에는 표시되지 않습니다.</p>
+      <label class="f">남은 수량 표시 시작 기본값 (개)</label><input id="sRemainAt" type="number" value="${Number(S.remainShowAt)||20}" style="max-width:160px"><p class="hint" style="margin:2px 0 0">품목 관리에서 품목별로 따로 정하지 않은 품목에 적용되는 기본값입니다. 남은 수량이 이 값 이하로 내려갈 때부터 고객 화면에 "남은 수량 n개"가 보입니다.</p>
       <label class="f">미입금 예약 강조 기준 (신청 후 시간)</label><input id="sUnpaidH" type="number" value="${Number(S.unpaidWarnHours)||24}" style="max-width:160px"><p class="hint" style="margin:2px 0 0">이 시간이 지나도 입금(또는 고객 입금표시)이 없는 예약은 명단에서 노란색으로 표시되고 "미입금 n일째"가 붙습니다.</p>
       <label class="f">한정 수량 안내 문구</label><input id="sLimit" value="${esc(S.limitNote)}">
       <label class="f">문의 전화</label><input id="sPhone" value="${esc(S.phone)}"></div>
