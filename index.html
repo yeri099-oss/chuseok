@@ -185,7 +185,7 @@ tr.picked td{background:#f0f0f0;color:#777}
 </style>
 </head>
 <body>
-<div id="app"><div class="loading">불러오는 중…</div></div>
+<div id="app"><div class="loading" style="padding-top:120px"><div style="font-size:15px;color:#b5533c;font-weight:700">꽃밥에피다</div><div style="margin-top:6px">불러오는 중…</div></div></div>
 <div id="toast" class="toast"></div>
 <div id="modalRoot"></div>
 
@@ -236,6 +236,8 @@ if (!DEMO) {
   const app = firebase.initializeApp(FIREBASE_CONFIG, APP_NAME);
   const auth = firebase.auth(app);
   const fs = firebase.firestore(app);
+  // 오프라인 캐시: 재접속 때 품목 사진·설정을 기기에 저장된 것부터 바로 보여주고 서버 변경분만 받아옴
+  try { fs.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch(e){}
   const conv = d => ({ id:d.id, ...d.data() });
   DB = {
     onAuth: cb => auth.onAuthStateChanged(u => cb(u ? { uid:u.uid, email:u.email, displayName:u.displayName } : null)),
@@ -378,7 +380,7 @@ DB.onAuth(async u => {
   try {
     if(isAdmin){
       profile = { name: isStaff ? "전화예약 입력" : "관리자" };
-      if(!isStaff) await ensureAdminSeed();
+      if(!isStaff) ensureAdminSeed().catch(e => console.warn(e));   // 화면을 막지 않도록 백그라운드로
       let firstOrders = true;
       unsubs.push(DB.listen(C.orders, null, d => { ORDERS = d; if(tab==="list" && document.activeElement && document.activeElement.id==="q") renderListTable(); else render(); if(firstOrders && !isStaff){ firstOrders = false; setTimeout(recomputeStock, 800); } }, e => toast(authMsg(e))));
       unsubs.push(DB.listen(C.users, null, d => { USERS = d; if(tab==="settings") render(); }));
@@ -394,10 +396,10 @@ DB.onAuth(async u => {
         const p = pendingSignup && pendingSignup.email===u.email ? pendingSignup : null;
         profile = { name: p ? p.name : (u.displayName||""), phone: p ? p.phone : digits(u.email.split("@")[0]), createdAt: DB.ts(), lastLoginAt: DB.ts() };
         await DB.set(C.users, u.uid, profile);
-        if(p){ await log("signup", "회원가입"); pendingSignup = null; }
+        if(p){ log("signup", "회원가입"); pendingSignup = null; }
       } else {
         DB.update(C.users, u.uid, { lastLoginAt: DB.ts() }).catch(()=>{});
-        await log("login", "로그인");
+        log("login", "로그인");   // 기다리지 않음
       }
       loadCartLocal();
       unsubs.push(DB.listen(C.orders, {field:"uid",op:"==",value:u.uid}, d => { ORDERS = d; render(); }, e => toast(authMsg(e))));
@@ -495,7 +497,7 @@ function render(){
   const app = $("#app");
   if(user === undefined) return;
   if(!user){ renderAuth(app); return; }
-  if(!profile){ app.innerHTML = `<div class="loading">불러오는 중…</div>`; return; }
+  if(!profile){ app.innerHTML = `<div class="loading" style="padding-top:120px"><img src="${LOGO}" alt="" style="width:64px;height:64px;border-radius:16px"><div style="margin-top:10px;color:var(--tc);font-weight:700">꽃밥에피다</div><div style="margin-top:4px">예약 정보를 불러오는 중…</div></div>`; return; }
   isAdmin ? renderAdmin(app) : renderCustomer(app);
 }
 
@@ -1135,7 +1137,7 @@ function renderAdminMenu(body){
     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="ghost" id="addMenu">+ 품목 추가</button><button class="ghost" id="resetMenu">기본 5개 품목 불러오기</button><button class="ghost" id="recalcStock">예약 수량 다시 계산</button></div>
     <p class="hint">판매 가능 수량을 비워두면 수량 제한 없이 계속 판매됩니다. 수량을 넣으면 고객 화면에 "남은 수량 n개"가 보이고, 다 차면 그 품목은 자동으로 품절 처리됩니다. 남은 수량이 맞지 않아 보이면 '예약 수량 다시 계산'을 누르세요.</p>`;
   const pending = {};
-  body.querySelectorAll("[data-img]").forEach(inp => inp.onchange = async () => { const f = inp.files[0]; if(!f) return; try { pending[inp.dataset.img] = await resizeImage(f, 720, 0.82); toast("사진이 준비되었습니다. 저장을 눌러주세요"); inp.closest(".adm-item").querySelector("img, .noimg").outerHTML = `<img src="${pending[inp.dataset.img]}" alt="">`; } catch(e){ toast("사진을 읽을 수 없습니다"); } });
+  body.querySelectorAll("[data-img]").forEach(inp => inp.onchange = async () => { const f = inp.files[0]; if(!f) return; try { pending[inp.dataset.img] = await resizeImage(f, 640, 0.76); toast("사진이 준비되었습니다. 저장을 눌러주세요"); inp.closest(".adm-item").querySelector("img, .noimg").outerHTML = `<img src="${pending[inp.dataset.img]}" alt="">`; } catch(e){ toast("사진을 읽을 수 없습니다"); } });
   body.querySelectorAll("[data-rmimg]").forEach(b => b.onclick = async () => { await DB.update(C.menu, b.dataset.rmimg, { image: null }); toast("사진 삭제"); });
   body.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
     const card = b.closest(".card"); const id = b.dataset.save; const g = f => card.querySelector(`[data-f="${f}"]`);
