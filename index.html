@@ -239,6 +239,7 @@ if (!DEMO) {
   // 오프라인 캐시: 재접속 때 품목 사진·설정을 기기에 저장된 것부터 바로 보여주고 서버 변경분만 받아옴
   try { fs.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch(e){}
   const conv = d => ({ id:d.id, ...d.data() });
+  const tagErr = (col,op,p) => p.catch(e => { if(e && typeof e === 'object'){ e.col = col; e.op = op; } throw e; });
   DB = {
     onAuth: cb => auth.onAuthStateChanged(u => cb(u ? { uid:u.uid, email:u.email, displayName:u.displayName } : null)),
     signUp: async (email,pw,name) => { const r = await auth.createUserWithEmailAndPassword(email,pw); if(name) await r.user.updateProfile({displayName:name}); return { uid:r.user.uid, email }; },
@@ -249,13 +250,14 @@ if (!DEMO) {
     adminCreateUser: async (email,pw,name) => { const app2 = firebase.apps.find(a => a.name==="chuseokWorker") || firebase.initializeApp(FIREBASE_CONFIG, "chuseokWorker"); const a2 = firebase.auth(app2); const r = await a2.createUserWithEmailAndPassword(email,pw); if(name) await r.user.updateProfile({displayName:name}); const uid = r.user.uid; await a2.signOut(); return uid; },
     ts: () => firebase.firestore.FieldValue.serverTimestamp(),
     inc: n => firebase.firestore.FieldValue.increment(n),
-    get: async (col,id) => { const d = await fs.collection(col).doc(id).get(); return d.exists ? conv(d) : null; },
-    set: (col,id,data,merge) => fs.collection(col).doc(id).set(data,{merge:!!merge}),
-    update: (col,id,data) => fs.collection(col).doc(id).update(data),
-    del: (col,id) => fs.collection(col).doc(id).delete(),
-    add: async (col,data) => (await fs.collection(col).add(data)).id,
-    getAll: async (col,filter) => { let q = fs.collection(col); if(filter) q = q.where(filter.field,filter.op,filter.value); const s = await q.get(); return s.docs.map(conv); },
-    listen: (col,filter,cb,err) => { let q = fs.collection(col); if(filter) q = q.where(filter.field,filter.op,filter.value); return q.onSnapshot(s => cb(s.docs.map(conv)), e => { console.error(e); err && err(e); }); }
+    // 오류에 어느 컬렉션의 어떤 작업인지 붙여서(권한 오류 원인 확인용) 화면 안내에 표시
+    get: async (col,id) => tagErr(col,"읽기", (async () => { const d = await fs.collection(col).doc(id).get(); return d.exists ? conv(d) : null; })()),
+    set: (col,id,data,merge) => tagErr(col,"저장", fs.collection(col).doc(id).set(data,{merge:!!merge})),
+    update: (col,id,data) => tagErr(col,"수정", fs.collection(col).doc(id).update(data)),
+    del: (col,id) => tagErr(col,"삭제", fs.collection(col).doc(id).delete()),
+    add: async (col,data) => tagErr(col,"추가", fs.collection(col).add(data).then(r => r.id)),
+    getAll: async (col,filter) => tagErr(col,"조회", (async () => { let q = fs.collection(col); if(filter) q = q.where(filter.field,filter.op,filter.value); const s = await q.get(); return s.docs.map(conv); })()),
+    listen: (col,filter,cb,err) => { let q = fs.collection(col); if(filter) q = q.where(filter.field,filter.op,filter.value); return q.onSnapshot(s => cb(s.docs.map(conv)), e => { console.error(col, e); e.col = col; e.op = "조회"; err && err(e); }); }
   };
 } else {
   // 데모 모드: 브라우저 메모리에만 저장 (file://로 열었을 때)
@@ -303,7 +305,7 @@ const phoneToEmail = (p,v) => digits(p) + ((Number(v)||1) > 1 ? "." + Number(v) 
 const loginInfo = async p => { try { return (await DB.get(C.login, digits(p))) || {}; } catch(e){ return {}; } };
 let toastT; const toast = m => { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); };
 async function copyText(t){ try { await navigator.clipboard.writeText(t); return true; } catch(e){ const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok = document.execCommand("copy"); }catch(_){} ta.remove(); return ok; } }
-const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 입력하셨던 번호입니다. 그때 정하신 비밀번호로 들어와 주세요. (매장에서 만들어 드린 계정이면 임시 비밀번호 " + TEMP_PW + ")"; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "전화번호 또는 비밀번호가 맞지 않습니다. 처음이시면 '주문자 정보 입력'으로 들어와 주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요)"; return "오류: " + ((e && (e.message||e.code)) || e); };
+const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-already-in-use")) return "이미 입력하셨던 번호입니다. 그때 정하신 비밀번호로 들어와 주세요. (매장에서 만들어 드린 계정이면 임시 비밀번호 " + TEMP_PW + ")"; if(c.includes("weak-password")) return "비밀번호는 6자리 이상으로 정해 주세요."; if(c.includes("wrong-password")||c.includes("user-not-found")||c.includes("invalid-credential")||c.includes("invalid-login")) return "전화번호 또는 비밀번호가 맞지 않습니다. 처음이시면 '주문자 정보 입력'으로 들어와 주세요."; if(c.includes("too-many-requests")) return "시도가 너무 많습니다. 잠시 후 다시 해주세요."; if(c.includes("network")) return "네트워크 연결을 확인해 주세요."; if(c.includes("permission-denied")) return "권한이 없습니다. (Firestore 규칙 확인 필요" + (e.col ? ": " + e.col + " " + (e.op||"") : "") + ")"; return "오류: " + ((e && (e.message||e.code)) || e); };
 
 /* ===================== 모달 ===================== */
 function openModal(html, opts={}){
@@ -375,7 +377,7 @@ const orderClosed = () => { if(S.orderOpen === false) return true; if(S.deadline
 DB.onAuth(async u => {
   unsubs.forEach(f => f()); unsubs = [];
   user = u; profile = null; isAdmin = false; isStaff = false; ORDERS = []; LOGS = []; USERS = []; RESETS = [];
-  window.__lockShown = false;
+  window.__lockShown = false; window.__loadErr = "";
   if(!u){ render(); return; }
   isStaff = (u.email === STAFF_EMAIL);
   isAdmin = (u.email === ADMIN_EMAIL) || isStaff;
@@ -410,7 +412,7 @@ DB.onAuth(async u => {
     }
     unsubs.push(DB.listen(C.menu, null, d => { MENU = d.sort((a,b)=>(a.sort||0)-(b.sort||0)); render(); }, e => toast(authMsg(e))));
     unsubs.push(DB.listen(C.meta, null, d => { const s = d.find(x => x.id==="settings"); S = s ? {...DEFAULT_SETTINGS, ...s} : {...DEFAULT_SETTINGS}; const st = d.find(x => x.id==="stock"); STOCK = (st && st.reserved) || {}; render(); }));
-  } catch(e){ console.error(e); toast(authMsg(e)); }
+  } catch(e){ console.error(e); toast(authMsg(e)); if(!profile){ profile = null; window.__loadErr = authMsg(e); } }
   render();
 });
 // 품목별 남은 수량 (한정 수량이 없으면 null)
@@ -500,7 +502,7 @@ function render(){
   const app = $("#app");
   if(user === undefined) return;
   if(!user){ renderAuth(app); return; }
-  if(!profile){ app.innerHTML = `<div class="loading" style="padding-top:120px"><img src="${LOGO}" alt="" style="width:64px;height:64px;border-radius:16px"><div style="margin-top:10px;color:var(--tc);font-weight:700">꽃밥에피다</div><div style="margin-top:4px">예약 정보를 불러오는 중…</div></div>`; return; }
+  if(!profile){ app.innerHTML = `<div class="loading" style="padding-top:120px"><img src="${LOGO}" alt="" style="width:64px;height:64px;border-radius:16px"><div style="margin-top:10px;color:var(--tc);font-weight:700">꽃밥에피다</div><div style="margin-top:4px">${window.__loadErr ? `<div style="color:#b3261e;font-weight:700;margin-bottom:8px">${esc(window.__loadErr)}</div><div class="hint">화면을 새로고침해 보시고, 계속되면 매장(02-766-6272)으로 연락해 주세요.</div><button class="ghost sm" id="loadErrOut" style="margin-top:10px">처음으로</button>` : "예약 정보를 불러오는 중…"}</div></div>`; const b = $("#loadErrOut"); if(b) b.onclick = () => { window.__loadErr = ""; DB.signOut(); }; return; }
   isAdmin ? renderAdmin(app) : renderCustomer(app);
 }
 
