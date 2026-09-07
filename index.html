@@ -1217,14 +1217,14 @@ function renderPrepayCard(){
   const open = PREPAY.filter(p => p.status !== "matched").sort((a,b) => (toDate(b.createdAt)||0)-(toDate(a.createdAt)||0));
   const done = PREPAY.filter(p => p.status === "matched").sort((a,b) => (toDate(b.matchedAt)||0)-(toDate(a.matchedAt)||0));
   return `<div class="card" style="border-color:#bfe0cc;background:#f7fcf8"><h3 style="color:var(--ok)">선입금 기록 (예약보다 입금이 먼저 들어온 분)</h3>
-    <p class="hint">통장에 들어온 입금자명과 금액을 그대로 적어 두세요. 같은 이름(주문자명 또는 입금자명)으로 예약이 들어오면 그 예약 행에 "선입금 있음" 표시와 '이 입금으로 확인' 버튼이 자동으로 뜹니다.</p>
+    <p class="hint">통장에 들어온 입금자명과 금액을 그대로 적어 두세요. 고객과 예약 내용이 확인되면 '예약으로 전환'을 눌러 이름·입금액이 채워진 입력창에서 품목과 픽업만 정해 저장하면 입금 확인된 예약으로 명단에 들어갑니다. 고객이 앱으로 먼저 예약하면 그 예약 행에 "선입금 있음"과 '이 입금으로 확인' 버튼이 자동으로 뜹니다.</p>
     <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
       <div style="flex:1;min-width:120px"><label class="f">입금자명</label><input id="ppName" placeholder="통장에 찍힌 이름"></div>
       <div style="flex:1;min-width:120px"><label class="f">금액</label><input id="ppAmt" type="number" inputmode="numeric" placeholder="예: 26000"></div>
       <div style="flex:1;min-width:140px"><label class="f">입금일</label><input id="ppDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
       <div style="flex:2;min-width:160px"><label class="f">메모</label><input id="ppMemo" placeholder="예: 완자전 1개 말씀, 전화번호 등"></div>
       <button id="ppAdd" style="padding:12px 18px">기록</button></div>
-    ${open.length ? `<div class="tblwrap" style="margin-top:10px"><table style="min-width:500px"><thead><tr><th>입금자명</th><th>금액</th><th>입금일</th><th>메모</th><th>짝 예약</th><th></th></tr></thead><tbody>${open.map(p => { const m = ORDERS.filter(o => o.status !== "cancelled" && !o.paid && (normName(o.depositor) === normName(p.depositor) || normName(o.name) === normName(p.depositor))); return `<tr><td><b>${esc(p.depositor)}</b></td><td>${won(p.amount)}</td><td>${esc(p.paidOn||"")}</td><td style="white-space:normal">${esc(p.memo||"")}</td><td class="nol">${m.length ? m.map(o => `<div><span class="pill ok">예약 있음</span> ${esc(o.name)} ${won(o.total)} <button class="sm" data-ppmatch="${p.id}" data-order="${o.id}" style="padding:3px 8px;font-size:12px">이 입금으로 확인</button></div>`).join("") : `<span class="hint">아직 예약 없음</span>`}</td><td class="nol"><button class="ghost sm" data-ppdel="${p.id}">지우기</button></td></tr>`; }).join("")}</tbody></table></div>` : `<p class="hint" style="margin-top:8px">기록된 선입금이 없습니다.</p>`}
+    ${open.length ? `<div class="tblwrap" style="margin-top:10px"><table style="min-width:500px"><thead><tr><th>입금자명</th><th>금액</th><th>입금일</th><th>메모</th><th>짝 예약</th><th></th></tr></thead><tbody>${open.map(p => { const m = ORDERS.filter(o => o.status !== "cancelled" && !o.paid && (normName(o.depositor) === normName(p.depositor) || normName(o.name) === normName(p.depositor))); return `<tr><td><b>${esc(p.depositor)}</b></td><td>${won(p.amount)}</td><td>${esc(p.paidOn||"")}</td><td style="white-space:normal">${esc(p.memo||"")}</td><td class="nol">${m.length ? m.map(o => `<div><span class="pill ok">예약 있음</span> ${esc(o.name)} ${won(o.total)} <button class="sm" data-ppmatch="${p.id}" data-order="${o.id}" style="padding:3px 8px;font-size:12px">이 입금으로 확인</button></div>`).join("") : `<span class="hint">아직 예약 없음</span>`}</td><td class="nol" style="white-space:nowrap"><button class="sm" data-ppconv="${p.id}" style="background:var(--ok)">예약으로 전환</button> <button class="ghost sm" data-ppdel="${p.id}">지우기</button></td></tr>`; }).join("")}</tbody></table></div>` : `<p class="hint" style="margin-top:8px">기록된 선입금이 없습니다.</p>`}
     ${done.length ? `<details style="margin-top:8px"><summary class="hint" style="cursor:pointer">처리 완료된 선입금 ${done.length}건</summary><div class="tblwrap" style="margin-top:6px"><table style="min-width:400px"><tbody>${done.map(p => { const o = ORDERS.find(x => x.id === p.matchedOrderId); return `<tr><td>${esc(p.depositor)}</td><td>${won(p.amount)}</td><td>${esc(p.paidOn||"")}</td><td class="hint">→ ${o ? esc(o.name)+" "+won(o.total) : "예약 삭제됨"} (${fmtDT(p.matchedAt)})</td><td class="nol"><button class="ghost sm" data-ppdel="${p.id}">지우기</button></td></tr>`; }).join("")}</tbody></table></div></details>` : ""}
   </div>`;
 }
@@ -1236,6 +1236,7 @@ function bindPrepay(){
     try { await DB.add(C.prepay, { depositor, amount, paidOn, memo, status:"open", createdAt:DB.ts() }); await log("prepay_add", `선입금 기록 ${depositor} ${won(amount)}${paidOn?" "+paidOn:""}${memo?" / "+memo:""}`); toast("선입금을 기록했습니다"); } catch(e){ toast(authMsg(e)); }
   };
   $("#ppName").onkeydown = $("#ppAmt").onkeydown = e => { if(e.key === "Enter") add.click(); };
+  document.querySelectorAll("[data-ppconv]").forEach(b => b.onclick = () => { const p = PREPAY.find(x => x.id === b.dataset.ppconv); if(!p) return; orderFormModal(null, { prepayId:p.id, depositor:p.depositor, amount:p.amount, paidOn:p.paidOn, memo:p.memo||"" }); });
   document.querySelectorAll("[data-ppdel]").forEach(b => b.onclick = async () => { const p = PREPAY.find(x => x.id === b.dataset.ppdel); if(!p) return; if(!(await confirmModal("선입금 기록 삭제", `<b>${esc(p.depositor)} ${won(p.amount)}</b> 기록을 지우시겠습니까?`, "지우기", true))) return; await DB.del(C.prepay, p.id); await log("prepay_del", `선입금 기록 삭제 ${p.depositor} ${won(p.amount)}`); });
   document.querySelectorAll("#prepayArea [data-ppmatch]").forEach(b => b.onclick = async () => {
     const o = ORDERS.find(x => x.id === b.dataset.order); const pp = PREPAY.find(x => x.id === b.dataset.ppmatch); if(!o || !pp) return;
@@ -1244,20 +1245,20 @@ function bindPrepay(){
     try { await DB.update(C.orders, o.id, { paid:true, paidAt:DB.ts(), prepayId:pp.id, memo:(o.memo?o.memo+" / ":"")+`선입금 ${won(pp.amount)}${pp.paidOn?" "+pp.paidOn:""}${diff?" (금액 다름)":""}`, updatedAt:DB.ts() }); await DB.update(C.prepay, pp.id, { status:"matched", matchedOrderId:o.id, matchedAt:DB.ts() }); await log("paid_on", `${o.name}(${fmtPhone(o.phone)}) ${won(o.total)} 선입금(${pp.depositor} ${won(pp.amount)})으로 입금확인 (${o.id})`); toast(`${o.name}님 입금 확인 완료`); } catch(e){ toast(authMsg(e)); }
   });
 }
-function orderFormModal(o){
-  const isNew = !o; const slots = timeSlots(S);
+function orderFormModal(o, pre){
+  const isNew = !o; const slots = timeSlots(S); pre = pre || {};
   const qty = {}; (o && o.items || []).forEach(i => qty[i.id] = i.qty);
   const menu = MENU.filter(m => m.active !== false || qty[m.id]);
-  openModal(`<h3>${isNew ? "전화 예약 입력" : "예약 수정"}</h3>
-    <p class="hint" style="margin:0 0 4px">주문자명만 있으면 저장할 수 있고, 나머지는 나중에 '수정'으로 채워도 됩니다.</p>
-    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">주문자명 <span style="color:var(--tc)">*</span></label><input id="fName" value="${esc(o?o.name:"")}" placeholder="이름"></div><div style="flex:1;min-width:200px"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):"")}" placeholder="모르면 비워두세요"></div></div>
+  openModal(`<h3>${isNew ? (pre.prepayId ? "선입금 → 예약 전환" : "전화 예약 입력") : "예약 수정"}</h3>
+    ${pre.prepayId ? `<div class="emph" style="background:#e6f4ec;border-color:#bfe0cc;color:#2f8f5b">선입금 <b>${esc(pre.depositor)} ${won(pre.amount)}</b>${pre.paidOn ? " ("+esc(pre.paidOn)+")" : ""}${pre.memo ? " · "+esc(pre.memo) : ""}<br><span style="font-weight:500">품목과 픽업 날짜·시간을 채우고 저장하면 입금 확인된 예약으로 명단에 들어갑니다.</span></div>` : `<p class="hint" style="margin:0 0 4px">주문자명만 있으면 저장할 수 있고, 나머지는 나중에 '수정'으로 채워도 됩니다.</p>`}
+    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">주문자명 <span style="color:var(--tc)">*</span></label><input id="fName" value="${esc(o?o.name:(pre.depositor||""))}" placeholder="이름"></div><div style="flex:1;min-width:200px"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o?fmtPhone(o.phone):(pre.phone||""))}" placeholder="모르면 비워두세요"></div></div>
     <label class="f">예약 품목과 수량</label>
     <div class="qgrid">${menu.map(m => `<div class="qrow ${qty[m.id]?"on":""}" data-row="${m.id}"><div class="n">${esc(m.name)}<small>${won(m.price)}</small></div><div class="qty"><button type="button" data-qd="-1" data-for="${m.id}">−</button><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}"><button type="button" data-qd="1" data-for="${m.id}">+</button></div></div>`).join("")}</div>
     <div class="row between" style="margin-top:10px;padding:10px 12px;background:#f6f1eb;border-radius:12px"><span style="font-size:16px">합계</span><b id="fTotal" style="color:var(--tc);font-size:24px">${won(o?o.total:0)}</b></div>
     <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">픽업 날짜</label><select id="fDate"><option value="">미정</option>${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
       <div style="flex:1;min-width:200px"><label class="f">픽업 시간</label><select id="fTime"><option value="">미정</option>${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
-    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:"")}" placeholder="비우면 주문자명과 동일"></div><div style="flex:1;min-width:200px"><label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":"")}" placeholder="퀵 발송 등"></div></div>
-    <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o&&o.paid?"checked":""}>입금 확인됨</label>
+    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:(pre.depositor||""))}" placeholder="비우면 주문자명과 동일"></div><div style="flex:1;min-width:200px"><label class="f">요청사항</label><input id="fMemo" value="${esc(o?o.memo||"":(pre.memo||""))}" placeholder="퀵 발송 등"></div></div>
+    <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${(o&&o.paid)||pre.prepayId?"checked":""}>입금 확인됨${pre.prepayId ? ` <span class="hint">(선입금 ${won(pre.amount)})</span>` : ""}</label>
     ${isNew && !isStaff ? `<label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="fAcct" style="width:18px">고객 계정도 만들기 (핸드폰번호 + 임시 비밀번호 ${TEMP_PW}, 고객이 링크로 예약 확인 가능)</label>` : ""}
     <div class="err" id="fErr"></div>
     <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "예약 저장" : "저장"}</button></div>`);
@@ -1278,11 +1279,13 @@ function orderFormModal(o){
       if(isNew){
         const u = phone ? USERS.find(x => x.phone === phone && !x.replacedBy) : null;
         Object.assign(data, { uid: u ? u.id : "phone:"+(phone || Date.now()), source:"phone", status:"active", createdAt:DB.ts(), paidAt: paid ? DB.ts() : null, createdBy:"admin" });
+        if(pre.prepayId){ data.prepayId = pre.prepayId; if(Number(pre.amount) !== Number(data.total)){ if(!(await new Promise(res => { openModal(`<h3>금액이 다릅니다</h3><p>선입금 <b>${won(pre.amount)}</b>, 예약 금액 <b>${won(data.total)}</b> (차액 ${won(Number(data.total)-Number(pre.amount))})</p><p class="hint">그대로 저장하면 입금 확인된 예약으로 들어갑니다. 차액은 요청사항에 남겨 두세요.</p><div class="btns"><button class="ghost" id="mCancel">돌아가기</button><button id="mOk">그래도 저장</button></div>`); $("#mCancel").onclick = () => { closeModal(); res(false); }; $("#mOk").onclick = () => { closeModal(); res(true); }; }))) { orderFormModal(null, { ...pre, ...data, memo:data.memo }); return; } data.memo = (data.memo ? data.memo + " / " : "") + `선입금 ${won(pre.amount)} (예약금액과 차액 ${won(Number(data.total)-Number(pre.amount))})`; } else data.memo = (data.memo ? data.memo + " / " : "") + `선입금 ${won(pre.amount)}${pre.paidOn ? " " + pre.paidOn : ""}`; }
         const id = await DB.add(C.orders, data);
+        if(pre.prepayId){ await DB.update(C.prepay, pre.prepayId, { status:"matched", matchedOrderId:id, matchedAt:DB.ts() }).catch(()=>{}); }
         setTimeout(recomputeStock, 300);
         if($("#fAcct") && $("#fAcct").checked){ if(phone) { closeModal(); await adminCreateCustomer(phone, name, true); } else toast("핸드폰번호가 없어 계정은 만들지 못했습니다"); }
-        await log("order_phone", `전화 예약 추가 ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime}${paid?" / 입금확인":""} (${id})`);
-        toast("전화 예약이 추가되었습니다");
+        await log(pre.prepayId ? "prepay_convert" : "order_phone", `${pre.prepayId ? "선입금 → 예약 전환" : "전화 예약 추가"} ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime}${paid?" / 입금확인":""} (${id})`);
+        toast(pre.prepayId ? "선입금이 예약으로 전환되었습니다" : "전화 예약이 추가되었습니다");
       } else {
         if(paid && !o.paid) data.paidAt = DB.ts(); if(!paid) data.paidAt = null;
         await DB.update(C.orders, o.id, data);
@@ -1360,7 +1363,7 @@ async function adminResetPassword(phone, name){
     render();
   } catch(e){ toast(authMsg(e)); }
 }
-const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", user_delete:"회원삭제", customer_paid:"고객입금표시", customer_paid_off:"입금표시해제", order_merge:"추가합산", picked_up:"수령", picked_up_off:"수령해제", prepay_add:"선입금기록", prepay_del:"선입금삭제", staff_login:"전화예약계정", staff_create:"계정생성", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", user_delete:"회원삭제", customer_paid:"고객입금표시", customer_paid_off:"입금표시해제", order_merge:"추가합산", picked_up:"수령", picked_up_off:"수령해제", prepay_add:"선입금기록", prepay_del:"선입금삭제", prepay_convert:"선입금전환", staff_login:"전화예약계정", staff_create:"계정생성", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
 function renderAdminLog(body){
   const q = logQ.trim().toLowerCase();
   let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
