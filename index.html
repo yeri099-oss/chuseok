@@ -343,10 +343,12 @@ let STOCK = {};           // holidayApp_meta/stock.reserved — 품목별 예약
 let ORDERS = [];          // 내 주문 또는(관리자) 전체 주문
 let LOGS = [];
 let USERS = []; let RESETS = []; let PREPAY = [];   // 예약 전 선입금 기록
+const quickPill = o => o && o.quick ? `<span class="pill" style="background:#fdebd3;color:#b3741f" title="${esc(o.quickAddr||'')}">퀵</span>` : "";
+const quickText = o => o && o.quick ? "퀵 배달" + (o.quickAddr ? " ("+o.quickAddr+")" : "") : "";
 const normName = n => String(n||"").replace(/\s+/g,"").replace(/[()（）]/g,"");
 const prepayFor = o => PREPAY.filter(p => p.status !== "matched" && normName(p.depositor) && (normName(p.depositor) === normName(o.depositor) || normName(p.depositor) === normName(o.name)));
 let cart = {};            // {menuId: qty}
-let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"" };
+let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"", quick:false, quickAddr:"" };
 let tab = "order";
 let unsubs = [];
 let authMode = "signup";  // signup(주문자 정보 입력, 기본) | login | admin | reset
@@ -638,14 +640,16 @@ function renderCartTab(body){
       <div class="chips" id="dateChips">${(S.pickupDates||[]).map(d => `<button class="chip ${cartForm.pickupDate===d?"on":""}" data-d="${d}">${fmtPickDate(d)}</button>`).join("")}</div>
       <label class="f">픽업 시간대 (오후 ${S.timeStart}시 ~ ${S.timeEnd}시)</label>
       <select id="timeSel"><option value="">시간대를 선택해 주세요</option>${slots.map(t => `<option value="${t}" ${cartForm.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select>
-      <p class="hint" style="margin:8px 0 0">택배는 불가하며 퀵 발송은 가능합니다 (퀵비용 별도). 퀵 발송을 원하시면 아래 요청사항에 적어주세요.</p>
+      <p class="hint" style="margin:8px 0 0">택배는 불가하며 퀵 배달은 가능합니다 (퀵비용 별도, 받으시는 분 부담).</p>
+      <label class="row" style="gap:8px;margin-top:8px;padding:10px 12px;background:#fff5e1;border-radius:12px"><input type="checkbox" id="quickChk" style="width:20px;height:20px" ${cartForm.quick?"checked":""}><b>퀵 배달로 받을게요</b> <span class="hint">(위에 고른 날짜와 시간에 보내드립니다)</span></label>
+      <div id="quickBox" ${cartForm.quick?"":"hidden"} style="margin-top:6px"><label class="f">받으실 주소</label><input id="quickAddr" value="${esc(cartForm.quickAddr)}" placeholder="예: 서울 종로구 ○○동 ○○아파트 101동 101호"></div>
     </div>
     <div class="card"><h3>입금 안내</h3>
       <div class="emph">입금하실 때 <u>입금자명</u>을 아래에 적으신 이름과 똑같이 입력해 주세요. 입금자명이 다르면 입금 확인이 늦어질 수 있습니다.</div>
       <label class="f">입금자명 (입금하실 때 쓰실 이름)</label>
       <input id="depositor" value="${esc(cartForm.depositor)}" placeholder="예: 홍길동">
       <label class="f">요청사항 (선택)</label>
-      <input id="memo" value="${esc(cartForm.memo)}" placeholder="퀵 발송 희망, 기타 요청">
+      <input id="memo" value="${esc(cartForm.memo)}" placeholder="기타 요청 (퀵 배달은 위에서 체크)">
       <div style="margin-top:12px"><button class="ghost" id="acctBtn" style="width:100%;border-color:var(--tc);color:var(--tc)">입금계좌 확인하기</button></div>
     </div>
     ${closed ? `<div class="emph">예약 접수가 마감되었습니다.</div>` : ""}
@@ -656,6 +660,8 @@ function renderCartTab(body){
   $("#timeSel").onchange = e => { cartForm.pickupTime = e.target.value; saveCartLocal(); };
   $("#depositor").oninput = e => { cartForm.depositor = e.target.value; saveCartLocal(); };
   $("#memo").oninput = e => { cartForm.memo = e.target.value; saveCartLocal(); };
+  $("#quickChk").onchange = e => { cartForm.quick = e.target.checked; $("#quickBox").hidden = !cartForm.quick; saveCartLocal(); if(cartForm.quick) $("#quickAddr").focus(); };
+  $("#quickAddr").oninput = e => { cartForm.quickAddr = e.target.value; saveCartLocal(); };
   $("#acctBtn").onclick = () => accountModal(total, cartForm.depositor.trim());
   $("#submitBtn").onclick = submitOrder;
 }
@@ -666,13 +672,14 @@ async function submitOrder(){
   if(!cartForm.pickupDate) return toast("픽업 날짜를 선택해 주세요");
   if(!cartForm.pickupTime) return toast("픽업 시간대를 선택해 주세요");
   const dep = cartForm.depositor.trim(); if(!dep) return toast("입금자명을 입력해 주세요");
+  const quick = !!cartForm.quick, quickAddr = (cartForm.quickAddr||"").trim(); if(quick && !quickAddr) return toast("퀵 배달을 받으실 주소를 입력해 주세요");
   if(orderClosed()) return toast("예약 접수가 마감되었습니다");
   // 남은 수량 확인 (최신 값으로)
   try { const st = await DB.get(C.meta, "stock"); STOCK = (st && st.reserved) || {}; } catch(e){}
   for(const i of items){ const m = MENU.find(x => x.id === i.id); const rem = m ? remaining(m) : null; if(rem !== null && i.qty > rem){ render(); return toast(rem <= 0 ? `${i.name}은(는) 예약이 모두 찼습니다` : `${i.name}은(는) ${rem}개까지만 예약할 수 있습니다`); } }
   const ok = await new Promise(res => {
     openModal(`<h3>예약 신청</h3><div style="font-size:14px">${items.map(i => `${esc(i.name)} × ${i.qty}`).join("<br>")}<hr style="border:0;border-top:1px solid var(--line)">
-      합계 <b>${won(total)}</b><br>픽업 <b>${esc(fmtPickDate(cartForm.pickupDate))} ${esc(cartForm.pickupTime)}</b><br>입금자명 <b>${esc(dep)}</b></div>
+      합계 <b>${won(total)}</b><br>픽업 <b>${esc(fmtPickDate(cartForm.pickupDate))} ${esc(cartForm.pickupTime)}</b><br>입금자명 <b>${esc(dep)}</b>${quick ? `<br>퀵 배달 <b>${esc(quickAddr)}</b> <span class="hint">(퀵비용 별도)</span>` : ""}</div>
       <div class="acct" style="margin-top:12px"><div>${esc(S.bank)}</div><div class="num">${esc(S.account)}</div><div>예금주: ${esc(S.holder)}</div>
         <div style="margin-top:6px">입금하실 금액 <b style="color:var(--tc)">${won(total)}</b></div>
         <button class="sm" id="mCopyAcct" style="margin-top:8px">계좌 복사하기</button></div>
@@ -684,7 +691,7 @@ async function submitOrder(){
     $("#mOk").onclick = () => { closeModal(); res(true); };
   });
   if(!ok) return;
-  const order = { uid:user.uid, name:profile.name||"", phone:profile.phone||"", items, total, qtyTotal: cartQty(), pickupDate:cartForm.pickupDate, pickupTime:cartForm.pickupTime, depositor:dep, memo:cartForm.memo.trim(), paid:false, paidAt:null, customerPaid:false, status:"active", createdAt:DB.ts(), updatedAt:DB.ts() };
+  const order = { uid:user.uid, name:profile.name||"", phone:profile.phone||"", items, total, qtyTotal: cartQty(), pickupDate:cartForm.pickupDate, pickupTime:cartForm.pickupTime, depositor:dep, memo:cartForm.memo.trim(), quick, quickAddr: quick ? quickAddr : "", paid:false, paidAt:null, customerPaid:false, status:"active", createdAt:DB.ts(), updatedAt:DB.ts() };
   // 같은 픽업 날짜의 미입금 예약이 있으면 합산 제안
   const same = ORDERS.filter(o => o.status !== "cancelled" && !o.paid && o.pickupDate === order.pickupDate).sort((a,b) => (toDate(b.createdAt)||0) - (toDate(a.createdAt)||0))[0];
   let mergeInto = null;
@@ -703,10 +710,10 @@ async function submitOrder(){
       items.forEach(i => { const ex = merged.find(m => m.id === i.id); if(ex) ex.qty += i.qty; else merged.push({...i}); });
       const mTotal = merged.reduce((s,i) => s + i.price*i.qty, 0), mQty = merged.reduce((s,i) => s + i.qty, 0);
       const memo = [mergeInto.memo, order.memo].filter(Boolean).join(" / ");
-      await DB.update(C.orders, mergeInto.id, { items:merged, total:mTotal, qtyTotal:mQty, pickupTime:order.pickupTime, depositor:dep, memo, customerPaid:false, customerPaidAt:null, mergedAt:DB.ts(), updatedAt:DB.ts() });
+      await DB.update(C.orders, mergeInto.id, { items:merged, total:mTotal, qtyTotal:mQty, pickupTime:order.pickupTime, depositor:dep, memo, quick: mergeInto.quick || quick, quickAddr: quick ? quickAddr : (mergeInto.quickAddr||""), customerPaid:false, customerPaidAt:null, mergedAt:DB.ts(), updatedAt:DB.ts() });
       await bumpStock(Object.fromEntries(items.map(i => [i.id, i.qty])));
       await log("order_merge", `추가 주문 합산 +${won(total)} → ${won(mTotal)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(order.pickupDate)} ${order.pickupTime} (${mergeInto.id})`);
-      cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"" }; saveCartLocal();
+      cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"", quick:false, quickAddr:"" }; saveCartLocal();
       tab = "done"; render(); window.scrollTo(0,0);
       toast(`기존 예약에 합쳤습니다. 합계 ${won(mTotal)}`);
       return;
@@ -714,7 +721,7 @@ async function submitOrder(){
     const id = await DB.add(C.orders, order);
     await bumpStock(Object.fromEntries(items.map(i => [i.id, i.qty])));
     await log("order_create", `예약 신청 ${won(total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(order.pickupDate)} ${order.pickupTime} / 입금자명 ${dep} (${id})`);
-    cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"" }; saveCartLocal();
+    cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"", quick:false, quickAddr:"" }; saveCartLocal();
     tab = "done"; render(); window.scrollTo(0,0);
     toast("예약이 신청되었습니다. 입금 후 확인을 기다려 주세요");
   } catch(e){ toast(authMsg(e)); }
@@ -738,6 +745,7 @@ function renderDoneTab(body){
       <div class="row between" style="margin-top:8px"><span>합계</span><b>${won(o.total)}</b></div>
       <div class="row between"><span>픽업</span><b>${esc(fmtPickDate(o.pickupDate))} ${esc(o.pickupTime)}</b></div>
       <div class="row between"><span>입금자명</span><b>${esc(o.depositor)}</b></div>
+      ${o.quick ? `<div class="row between" style="align-items:flex-start"><span>퀵 배달</span><b style="text-align:right">${esc(o.quickAddr||"")}<br><span class="hint" style="font-weight:400">퀵비용 별도 (받으실 때 부담)</span></b></div>` : ""}
       ${o.memo ? `<div class="row between"><span>요청사항</span><span>${esc(o.memo)}</span></div>` : ""}
       <div class="hint" style="margin-top:6px">신청 ${fmtDT(o.createdAt)}${o.paid&&o.paidAt ? " · 입금확인 "+fmtDT(o.paidAt) : ""}</div>
       ${cancelled ? "" : `<div class="row" style="margin-top:10px;gap:8px"><button class="ghost sm" data-img="${o.id}" style="flex:1">이미지로 저장/공유</button><button class="ghost sm" data-share="${o.id}" style="flex:1">링크 공유</button></div>`}
@@ -766,7 +774,8 @@ function renderDoneTab(body){
 function orderSummaryText(o){
   const lines = [`[꽃밥에피다 2026 추석 명절음식 예약]`, o.paid ? "예약이 완료되었습니다" : (o.customerPaid ? "입금 확인 중입니다 (입금완료 순으로 예약 확정)" : "입금완료 순으로 예약이 확정됩니다"), ""];
   (o.items||[]).forEach(i => lines.push(`${i.name} × ${i.qty}  ${won(i.price*i.qty)}`));
-  lines.push(`합계 ${won(o.total)}`, `픽업 ${fmtPickDate(o.pickupDate)} ${o.pickupTime}`, `입금자명 ${o.depositor}`);
+  lines.push(`합계 ${won(o.total)}`, `${o.quick ? "퀵 배달" : "픽업"} ${fmtPickDate(o.pickupDate)} ${o.pickupTime}`, `입금자명 ${o.depositor}`);
+  if(o.quick) lines.push(`배달 주소 ${o.quickAddr||""} (퀵비용 별도)`);
   if(!o.paid) lines.push("", `입금계좌 ${S.bank} ${S.account} (${S.holder})`);
   lines.push("", `문의 ${S.phone}`, location.origin + location.pathname);
   return lines.join("\n");
@@ -836,7 +845,7 @@ function filteredRows(){
   let rows = orderRows();
   if(!showCancelled) rows = rows.filter(r => r.status !== "cancelled");
   const q = adminQ.trim().toLowerCase();
-  if(q){ rows = rows.filter(r => [r.name, r.phone, r.phoneText, r.itemsText, r.qtyTotal, r.total, fmtPickDate(r.pickupDate), r.pickupDate, r.pickupTime, r.depositor, r.paid?"입금완료 완료 o":(r.customerPaid?"고객입금표시 입금했음 확인중":"미입금 대기 x"), r.pickedUp?"수령완료 수령":"미수령", unpaidDays(r)?"미입금경과 오래":"", fmtDT(r.createdAt), r.memo, r.status==="cancelled"?"취소":"", r.source==="phone"?"전화":"앱"].join(" ").toLowerCase().includes(q)); }
+  if(q){ rows = rows.filter(r => [r.name, r.phone, r.phoneText, r.itemsText, r.qtyTotal, r.total, fmtPickDate(r.pickupDate), r.pickupDate, r.pickupTime, r.depositor, r.paid?"입금완료 완료 o":(r.customerPaid?"고객입금표시 입금했음 확인중":"미입금 대기 x"), r.pickedUp?"수령완료 수령":"미수령", unpaidDays(r)?"미입금경과 오래":"", fmtDT(r.createdAt), r.memo, r.status==="cancelled"?"취소":"", r.source==="phone"?"전화":"앱", r.quick?"퀵 퀵배달 배달 "+(r.quickAddr||""):""].join(" ").toLowerCase().includes(q)); }
   const k = adminSort.key, d = adminSort.dir;
   rows.sort((a,b) => { let x = a[k], y = b[k]; if(k==="createdAt"){ x=a.createdMs; y=b.createdMs; } if(k==="paid"){ x = a.paid?2:(a.customerPaid?1:0); y = b.paid?2:(b.customerPaid?1:0); } if(k==="pickedUp"){ x = a.pickedUp?1:0; y = b.pickedUp?1:0; } if(typeof x==="number"||typeof y==="number") return ((x||0)-(y||0))*d; return String(x||"").localeCompare(String(y||""),"ko")*d; });
   return rows;
@@ -869,10 +878,10 @@ function renderListTable(){
   const rc = $("#rowCount"); if(rc) rc.textContent = rows.length + "건";
   area.innerHTML = `<div class="tblwrap"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}">${l}${adminSort.key===k?`<span class="arr">${adminSort.dir>0?"▲":"▼"}</span>`:""}</th>`).join("")}<th></th></tr></thead>
     <tbody>${rows.map(r => `<tr class="${r.status==="cancelled"?"cancelled":""} ${r.paid?"paid":""} ${unpaidDays(r)?"stale":""} ${r.pickedUp?"picked":""}">
-      <td><b>${esc(r.name)}</b><br>${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}${r.status==="cancelled"?` <span class="pill cancel">취소</span>${r.cancelReason?`<div class="hint" style="font-size:11px;white-space:normal;text-decoration:none">${esc(r.cancelReason)}</div>`:""}`:""}</td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${r.pickupDate ? esc(fmtPickDate(r.pickupDate)) : `<span class="hint">미정</span>`}</td><td>${r.pickupTime ? esc(r.pickupTime) : `<span class="hint">미정</span>`}</td><td>${esc(r.depositor)}</td>
+      <td><b>${esc(r.name)}</b><br>${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}${quickPill(r)}${r.status==="cancelled"?` <span class="pill cancel">취소</span>${r.cancelReason?`<div class="hint" style="font-size:11px;white-space:normal;text-decoration:none">${esc(r.cancelReason)}</div>`:""}`:""}</td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${r.pickupDate ? esc(fmtPickDate(r.pickupDate)) : `<span class="hint">미정</span>`}</td><td>${r.pickupTime ? esc(r.pickupTime) : `<span class="hint">미정</span>`}</td><td>${esc(r.depositor)}</td>
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:r.customerPaid?`<span class="pill" style="background:#e8f0fb;color:#2b5aa6" title="고객이 입금완료를 표시함 ${fmtDT(r.customerPaidAt)}">고객 입금표시</span>`:`<span class="pill wait">대기</span>`}</label>${unpaidDays(r) ? `<div style="font-size:11px;color:#b3741f;font-weight:700;margin-top:2px">미입금 ${unpaidDays(r)}일째</div>` : ""}${(!isStaff && !r.paid && prepayFor(r).length) ? prepayFor(r).map(pp => `<div style="margin-top:4px"><span class="pill" style="background:#e6f4ec;color:#2f8f5b">선입금 ${won(pp.amount)}${pp.paidOn?" "+esc(pp.paidOn):""}${Number(pp.amount)!==Number(r.total)?" (금액 다름)":""}</span> <button class="sm" data-ppmatch="${pp.id}" data-order="${r.id}" style="padding:3px 8px;font-size:12px">이 입금으로 확인</button></div>`).join("") : ""}`}</td>
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-picked="${r.id}" ${r.pickedUp?"checked":""}>${r.pickedUp?`<span class="pill ok">수령</span>`:`<span class="hint">미수령</span>`}</label>`}</td>
-      <td class="memo" style="font-size:12px" title="신청 ${fmtDT(r.createdAt)}">${esc(r.memo||"")}</td>
+      <td class="memo" style="font-size:12px" title="신청 ${fmtDT(r.createdAt)}">${r.quick ? `<div style="color:#b3741f;font-weight:700">퀵 배달 ${esc(r.quickAddr||"(주소 없음)")}</div>` : ""}${esc(r.memo||"")}</td>
       <td class="nol acts"><button class="ghost sm" data-edit="${r.id}">수정</button>${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`}${(!isStaff && r.phone && !USERS.some(u => u.phone === r.phone && !u.replacedBy)) ? `<button class="ghost sm" data-acct="${r.id}" title="고객이 링크로 확인할 수 있게 계정 만들기">계정</button>` : ""}${isStaff ? "" : `<button class="ghost sm" data-del="${r.id}" style="color:var(--danger)">삭제</button>`}</td></tr>`).join("")}
       ${rows.length===0 ? `<tr><td colspan="${COLS.length+1}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
   const body = area;
@@ -992,7 +1001,7 @@ function renderAdminSummary(body){
         const all = groups.flatMap(g => g.orders); const picked = all.filter(o => o.pickedUp).length;
         return `<p class="hint">수령 ${picked}건 / 미수령 ${all.length - picked}건 · 픽업 당일 찾아가신 분은 수령 칸에 체크하세요.</p><div class="tblwrap"><table style="min-width:800px"><thead><tr><th>픽업</th><th>주문자명</th><th>전화번호</th><th>예약품목</th><th style="text-align:center">수량</th><th>합계금액</th><th>입금자명</th><th>입금</th><th>수령</th><th>요청사항</th></tr></thead><tbody>${groups.map(g => `
           <tr style="background:#fbe5d6"><td colspan="10" style="font-weight:700">${g.date ? esc(fmtPickDate(g.date)) : "날짜 미정"} · ${esc(g.time)} <span class="hint" style="font-weight:500">${g.orders.length}건 · ${g.orders.reduce((s,o)=>s+(o.qtyTotal||0),0)}개 · 수령 ${g.orders.filter(o=>o.pickedUp).length}건</span></td></tr>
-          ${g.orders.map(o => `<tr class="${o.paid?"paid":""} ${o.pickedUp?"picked":""}"><td class="hint">${esc(g.time)}</td><td><b>${esc(o.name)}</b></td><td>${esc(fmtPhone(o.phone))}</td><td class="items">${esc((o.items||[]).map(i => `${i.name} ${i.qty}`).join("\n"))}</td><td style="text-align:center">${o.qtyTotal||0}</td><td>${won(o.total)}</td><td>${esc(o.depositor||"")}</td><td class="nol">${o.paid?`<span class="pill ok">입금완료</span>`:o.customerPaid?`<span class="pill" style="background:#e8f0fb;color:#2b5aa6">고객 입금표시</span>`:`<span class="pill wait">대기</span>`}</td><td class="nol"><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-picked2="${o.id}" ${o.pickedUp?"checked":""}>${o.pickedUp?`<span class="pill ok">수령</span>`:`<span class="hint">미수령</span>`}</label></td><td style="white-space:pre-line;max-width:180px">${esc(o.memo||"")}</td></tr>`).join("")}`).join("")}</tbody></table></div>`; })()}
+          ${g.orders.map(o => `<tr class="${o.paid?"paid":""} ${o.pickedUp?"picked":""}"><td class="hint">${esc(g.time)}</td><td><b>${esc(o.name)}</b> ${quickPill(o)}</td><td>${esc(fmtPhone(o.phone))}</td><td class="items">${esc((o.items||[]).map(i => `${i.name} ${i.qty}`).join("\n"))}</td><td style="text-align:center">${o.qtyTotal||0}</td><td>${won(o.total)}</td><td>${esc(o.depositor||"")}</td><td class="nol">${o.paid?`<span class="pill ok">입금완료</span>`:o.customerPaid?`<span class="pill" style="background:#e8f0fb;color:#2b5aa6">고객 입금표시</span>`:`<span class="pill wait">대기</span>`}</td><td class="nol"><label class="row" style="gap:6px"><input type="checkbox" class="chk" data-picked2="${o.id}" ${o.pickedUp?"checked":""}>${o.pickedUp?`<span class="pill ok">수령</span>`:`<span class="hint">미수령</span>`}</label></td><td style="white-space:pre-line;max-width:180px">${esc(o.memo||"")}</td></tr>`).join("")}`).join("")}</tbody></table></div>`; })()}
     </div>`;
   $("#xlsBtn2").onclick = exportExcel;
   body.querySelectorAll("[data-picked2]").forEach(c => c.onchange = async () => {
@@ -1004,17 +1013,17 @@ function excelData(){
   const rows = filteredRows();
   const names = MENU.map(m => m.name);
   const short = n => n.replace(/^자연양돈 |^유기농 |^달맞이 둥근 /,"").replace(/ 도시락$| 1kg$| 1\.5L$/,"");
-  const head = ["접수","주문자명","전화번호", ...names.map(short), "총 수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","요청사항","수령","신청일시","입금확인일시","예약품목(요약)"];
-  const data = rows.map(r => [r.source==="phone"?"전화":"앱", r.name, r.phoneText, ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : null; }), r.qtyTotal||0, r.total||0, r.pickupDate ? fmtPickDate(r.pickupDate) : "미정", r.pickupTime || "미정", r.depositor||"", r.paid?"입금완료":(r.customerPaid?"고객 입금표시":"미입금"), r.status==="cancelled"?"취소":"예약", (r.memo||"") + (r.status==="cancelled" && r.cancelReason ? ` [취소사유: ${r.cancelReason}]` : ""), r.pickedUp?"수령":"", fmtDT(r.createdAt), fmtDT(r.paidAt), r.itemsText.replace(/\n/g,"\n")]);
+  const head = ["접수","주문자명","전화번호", ...names.map(short), "총 수량","합계금액","픽업날짜","픽업시간","입금자명","입금여부","상태","퀵배달","요청사항","수령","신청일시","입금확인일시","예약품목(요약)"];
+  const data = rows.map(r => [r.source==="phone"?"전화":"앱", r.name, r.phoneText, ...names.map(n => { const it = (r.items||[]).find(i => i.name===n); return it ? it.qty : null; }), r.qtyTotal||0, r.total||0, r.pickupDate ? fmtPickDate(r.pickupDate) : "미정", r.pickupTime || "미정", r.depositor||"", r.paid?"입금완료":(r.customerPaid?"고객 입금표시":"미입금"), r.status==="cancelled"?"취소":"예약", quickText(r), (r.memo||"") + (r.status==="cancelled" && r.cancelReason ? ` [취소사유: ${r.cancelReason}]` : ""), r.pickedUp?"수령":"", fmtDT(r.createdAt), fmtDT(r.paidAt), r.itemsText.replace(/\n/g,"\n")]);
   // 집계 시트 (전체 예약 기준, 취소 제외 — 검색 필터와 무관)
   const sd = summaryData(); const dateLabels = sd.dates.map(fmtPickDate);
   const sumHead = ["품목", ...dateLabels, "날짜 미정", "전체 합계", "입금완료", "고객 입금표시", "미입금"];
   const sumData = [...sd.byItem, sd.totalRow].map(r => [r.name, ...r.dates, r.undated, r.total, r.paid, r.claimed, r.unpaid]);
   const timeHead = ["픽업 날짜", "시간대", "예약 건수", ...names.map(short), "총 수량"];
   const timeData = [...sd.dateTotals.map(r => [fmtPickDate(r.date), "날짜 합계", r.orders, ...r.items, r.items.reduce((a,b)=>a+b,0)]), ...sd.byTime.map(r => [r.date ? fmtPickDate(r.date) : "날짜 미정", r.time, r.orders, ...r.items, r.items.reduce((a,b)=>a+b,0)])];
-  const pickHead = ["픽업 날짜","시간대","주문자명","전화번호","예약품목","수량","합계금액","입금자명","입금여부","수령","요청사항"];
-  const pickData = []; pickupOrderedList().forEach(g => { pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, `${g.orders.length}건 / ${g.orders.reduce((s,o)=>s+(o.qtyTotal||0),0)}개`, "", "", null, null, "", "", "", ""]);
-    g.orders.forEach(o => pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, o.name, fmtPhone(o.phone), (o.items||[]).map(i => `${i.name} ${i.qty}`).join(", "), o.qtyTotal||0, o.total||0, o.depositor||"", o.paid?"입금완료":(o.customerPaid?"고객 입금표시":"미입금"), o.pickedUp?"수령":"", o.memo||""])); });
+  const pickHead = ["픽업 날짜","시간대","주문자명","전화번호","예약품목","수량","합계금액","입금자명","입금여부","수령","퀵배달","요청사항"];
+  const pickData = []; pickupOrderedList().forEach(g => { pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, `${g.orders.length}건 / ${g.orders.reduce((s,o)=>s+(o.qtyTotal||0),0)}개`, "", "", null, null, "", "", "", "", ""]);
+    g.orders.forEach(o => pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, o.name, fmtPhone(o.phone), (o.items||[]).map(i => `${i.name} ${i.qty}`).join(", "), o.qtyTotal||0, o.total||0, o.depositor||"", o.paid?"입금완료":(o.customerPaid?"고객 입금표시":"미입금"), o.pickedUp?"수령":"", quickText(o), o.memo||""])); });
   // 입금 대조: 입금자명 가나다순 → 금액
   const active = rows.filter(r => r.status !== "cancelled");
   const matchHead = ["입금자명","금액","입금여부","주문자명","전화번호","고객 입금표시 시각","입금 확인 시각","픽업"];
@@ -1087,10 +1096,10 @@ function buildXlsx(d){
   const rows1 = [ d.head.map(v => ({v, s:1})) ];
   d.data.forEach(r => { const cancelled = r[3+n+6] === "취소";
     rows1.push(r.map((v, ci) => { if(cancelled) return { v, s:9 }; let st = isCenter(ci) ? 4 : 3;
-      if(ci === 3+n+8) st = v === "수령" ? 7 : 4;
-      if(ci >= 3 && ci < 3+n && v) st = 5; if(ci === 3+n+1) st = 6; if(ci === 3+n+5) st = v === "입금완료" ? 7 : 8; if(ci === H-1 || ci === 3+n+7) st = 10;
+      if(ci === 3+n+9) st = v === "수령" ? 7 : 4;
+      if(ci >= 3 && ci < 3+n && v) st = 5; if(ci === 3+n+1) st = 6; if(ci === 3+n+5) st = v === "입금완료" ? 7 : 8; if(ci === H-1 || ci === 3+n+7 || ci === 3+n+8) st = 10;
       return { v, s:st }; })); });
-  const widths1 = [6, 10, 14, ...Array(n).fill(9), 8, 11, 13, 10, 10, 9, 6, 20, 6, 16, 16, 44];
+  const widths1 = [6, 10, 14, ...Array(n).fill(9), 8, 11, 13, 10, 10, 9, 6, 22, 20, 6, 16, 16, 44];
   const rows2 = [ d.sumHead.map(v => ({v, s:2})) ];
   d.sumData.forEach((r, i) => { const last = i === d.sumData.length - 1; rows2.push(r.map((v, ci) => ({ v, s: last ? (ci ? 11 : 12) : (ci ? 4 : 3) }))); });
   const widths2 = [30, ...Array(d.sumHead.length - 1).fill(13)];
@@ -1098,8 +1107,8 @@ function buildXlsx(d){
   d.timeData.forEach(r => { const isDate = r[1] === "날짜 합계"; rows3.push(r.map((v, ci) => ({ v, s: isDate ? (ci < 2 ? 12 : 11) : (ci < 2 ? 3 : 4) }))); });
   const widths3 = [14, 12, 10, ...Array(d.names.length).fill(11), 10];
   const rows4 = [ d.pickHead.map(v => ({v, s:2})) ];
-  d.pickData.forEach(r => { const isGroup = r[3] === "" && r[5] === null; rows4.push(r.map((v, ci) => ({ v, s: isGroup ? 12 : (ci === 5 || ci === 9 ? 4 : ci === 6 ? 6 : ci === 8 ? (v === "입금완료" ? 7 : 8) : ci === 4 || ci === 10 ? 10 : 3) }))); });
-  const widths4 = [14, 12, 12, 15, 44, 7, 11, 12, 12, 7, 20];
+  d.pickData.forEach(r => { const isGroup = r[3] === "" && r[5] === null; rows4.push(r.map((v, ci) => ({ v, s: isGroup ? 12 : (ci === 5 || ci === 9 ? 4 : ci === 6 ? 6 : ci === 8 ? (v === "입금완료" ? 7 : 8) : ci === 4 || ci === 10 || ci === 11 ? 10 : 3) }))); });
+  const widths4 = [14, 12, 12, 15, 44, 7, 11, 12, 12, 7, 22, 20];
   const rows6 = [ d.matchHead.map(v => ({v, s:1})) ];
   d.matchData.forEach(r => rows6.push(r.map((v, ci) => ({ v, s: ci === 1 ? 6 : ci === 2 ? (v === "입금완료" ? 7 : 8) : 3 }))));
   const widths6 = [14, 12, 12, 12, 15, 18, 18, 22];
@@ -1260,6 +1269,8 @@ function orderFormModal(o, pre){
     <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">픽업 날짜</label><select id="fDate"><option value="">미정</option>${(S.pickupDates||[]).map(d => `<option value="${d}" ${o&&o.pickupDate===d?"selected":""}>${fmtPickDate(d)}</option>`).join("")}</select></div>
       <div style="flex:1;min-width:200px"><label class="f">픽업 시간</label><select id="fTime"><option value="">미정</option>${slots.map(t => `<option value="${t}" ${o&&o.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select></div></div>
     <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">입금자명</label><input id="fDep" value="${esc(o?o.depositor:(pre.depositor||""))}" placeholder="비우면 주문자명과 동일"></div></div>
+    <label class="row" style="gap:8px;margin-top:10px;padding:10px 12px;background:#fff5e1;border-radius:12px"><input type="checkbox" id="fQuick" style="width:20px;height:20px" ${o&&o.quick?"checked":""}><b>퀵 배달</b> <span class="hint">(퀵비용 별도, 위 날짜·시간에 발송)</span></label>
+    <div id="fQuickBox" ${o&&o.quick?"":"hidden"} style="margin-top:6px"><label class="f">배달 주소</label><input id="fQuickAddr" value="${esc(o?o.quickAddr||"":"")}" placeholder="받으실 주소"></div>
     <div style="margin-top:8px"><label class="f">요청사항</label><textarea id="fMemo" rows="4" style="width:100%;min-height:96px;resize:vertical;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;box-sizing:border-box" placeholder="퀵 발송, 포장 요청, 통화 내용 등 자유롭게 적어 주세요">${esc(o?o.memo||"":(pre.memo||""))}</textarea></div>
     <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${(o&&o.paid)||pre.prepayId?"checked":""}>입금 확인됨${pre.prepayId ? ` <span class="hint">(선입금 ${won(pre.amount)})</span>` : ""}</label>
     ${isNew && !isStaff ? `<label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="fAcct" style="width:18px">고객 계정도 만들기 (핸드폰번호 + 임시 비밀번호 ${TEMP_PW}, 고객이 링크로 예약 확인 가능)</label>` : ""}
@@ -1270,6 +1281,7 @@ function orderFormModal(o, pre){
   setTimeout(() => { const n = $("#fName"); if(n && !n.value) n.focus(); }, 50);
   document.querySelectorAll("[data-q]").forEach(i => i.oninput = calc);
   document.querySelectorAll("[data-qd]").forEach(b => b.onclick = () => { const i = document.querySelector(`[data-q="${b.dataset.for}"]`); i.value = Math.max(0, (Number(i.value)||0) + Number(b.dataset.qd)); calc(); });
+  $("#fQuick").onchange = e => { $("#fQuickBox").hidden = !e.target.checked; if(e.target.checked) $("#fQuickAddr").focus(); };
   $("#mCancel").onclick = closeModal;
   $("#mOk").onclick = async () => {
     const name = $("#fName").value.trim(); const phone = digits($("#fPhone").value);
@@ -1277,7 +1289,7 @@ function orderFormModal(o, pre){
     const err = !name ? "주문자명을 입력해 주세요." : (phone && !/^0\d{8,10}$/.test(phone)) ? "전화번호가 이상합니다. 모르면 비워두세요." : "";
     if(err){ $("#fErr").textContent = err; return; }
     const paid = $("#fPaid").checked;
-    const data = { name, phone, items, total: items.reduce((s,i)=>s+i.price*i.qty,0), qtyTotal: items.reduce((s,i)=>s+i.qty,0), pickupDate:$("#fDate").value, pickupTime:$("#fTime").value, depositor:($("#fDep").value.trim()||name), memo:$("#fMemo").value.trim(), paid, updatedAt:DB.ts() };
+    const data = { name, phone, items, total: items.reduce((s,i)=>s+i.price*i.qty,0), qtyTotal: items.reduce((s,i)=>s+i.qty,0), pickupDate:$("#fDate").value, pickupTime:$("#fTime").value, depositor:($("#fDep").value.trim()||name), memo:$("#fMemo").value.trim(), quick:$("#fQuick").checked, quickAddr:$("#fQuick").checked ? $("#fQuickAddr").value.trim() : "", paid, updatedAt:DB.ts() };
     try {
       if(isNew){
         const u = phone ? USERS.find(x => x.phone === phone && !x.replacedBy) : null;
@@ -1287,7 +1299,7 @@ function orderFormModal(o, pre){
         if(pre.prepayId){ await DB.update(C.prepay, pre.prepayId, { status:"matched", matchedOrderId:id, matchedAt:DB.ts() }).catch(()=>{}); }
         setTimeout(recomputeStock, 300);
         if($("#fAcct") && $("#fAcct").checked){ if(phone) { closeModal(); await adminCreateCustomer(phone, name, true); } else toast("핸드폰번호가 없어 계정은 만들지 못했습니다"); }
-        await log(pre.prepayId ? "prepay_convert" : "order_phone", `${pre.prepayId ? "선입금 → 예약 전환" : "전화 예약 추가"} ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime}${paid?" / 입금확인":""} (${id})`);
+        await log(pre.prepayId ? "prepay_convert" : "order_phone", `${pre.prepayId ? "선입금 → 예약 전환" : "전화 예약 추가"} ${name}(${fmtPhone(phone)}) ${won(data.total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(data.pickupDate)} ${data.pickupTime}${data.quick?" / 퀵 "+data.quickAddr:""}${paid?" / 입금확인":""} (${id})`);
         toast(pre.prepayId ? "선입금이 예약으로 전환되었습니다" : "전화 예약이 추가되었습니다");
       } else {
         if(paid && !o.paid) data.paidAt = DB.ts(); if(!paid) data.paidAt = null;
