@@ -225,7 +225,7 @@ const DEFAULT_SETTINGS = {
   pickupDates:["2026-09-23","2026-09-24"], timeStart:12, timeEnd:19,
   limitNote:"100세트 한정 선착순 마감 (예약 수량 외 추가 구입 불가)",
   phone:"02-3676-6262 / 02-766-6272",
-  notice:"안녕하세요, 꽃밥지기 송정은입니다.\n올해는 내부 사정으로 명절음식 전체 준비는 쉬어가고, 가장 사랑받는 자연양돈 완자전(동그랑땡)과 송편, 식혜만 준비합니다. 실망스러우시더라도 이해 부탁드려요.\n\n예약 접수: 9월 7일(월) ~ 9월 20일(일) 저녁 8시\n100세트 한정 선착순 마감 (올해는 예약 수량 외 추가 구입이 어려우니 꼭 필요하신 수량을 점검해 주세요)\n픽업: 9월 23일(수), 24일(목) 오후 12시 ~ 7시\n택배 불가, 퀵 발송 가능 (퀵비용 별도)\n문의: 02-3676-6262 / 02-766-6272",
+  notice:"안녕하세요, 꽃밥지기 송정은입니다.\n올해는 내부 사정으로 명절음식 전체 준비는 쉬어가고, 가장 사랑받는 자연양돈 완자전(동그랑땡)과 송편, 식혜만 준비합니다. 실망스러우시더라도 이해 부탁드려요.\n\n예약 접수: 9월 7일(월) ~ 9월 20일(일) 저녁 8시\n100세트 한정 선착순 마감 (올해는 예약 수량 외 추가 구입이 어려우니 꼭 필요하신 수량을 점검해 주세요)\n픽업: 9월 23일(수), 24일(목) 오후 12시 ~ 7시\n택배 불가\n문의: 02-3676-6262 / 02-766-6272",
   materials:"Non GMO 사료로 키운 무항생제 자연양돈 돈육\n무농약 채소\n무항생제 동물복지 유정란\n무농약 우리밀 / 무농약콩 두부\n국내산 참기름, 들기름\n국내산콩 전통발효간장 / 태안자염\n마스코바도 유기농설탕\n네니아 Non GMO 냉압착 유채유"
 };
 
@@ -348,7 +348,7 @@ const quickText = o => o && o.quick ? "퀵 배달" + (o.quickAddr ? " ("+o.quick
 const normName = n => String(n||"").replace(/\s+/g,"").replace(/[()（）]/g,"");
 const prepayFor = o => PREPAY.filter(p => p.status !== "matched" && normName(p.depositor) && (normName(p.depositor) === normName(o.depositor) || normName(p.depositor) === normName(o.name)));
 let cart = {};            // {menuId: qty}
-let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"", quick:false, quickAddr:"" };
+let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"" };
 let tab = "order";
 let unsubs = [];
 let authMode = "signup";  // signup(주문자 정보 입력, 기본) | login | admin | reset
@@ -640,16 +640,13 @@ function renderCartTab(body){
       <div class="chips" id="dateChips">${(S.pickupDates||[]).map(d => `<button class="chip ${cartForm.pickupDate===d?"on":""}" data-d="${d}">${fmtPickDate(d)}</button>`).join("")}</div>
       <label class="f">픽업 시간대 (오후 ${S.timeStart}시 ~ ${S.timeEnd}시)</label>
       <select id="timeSel"><option value="">시간대를 선택해 주세요</option>${slots.map(t => `<option value="${t}" ${cartForm.pickupTime===t?"selected":""}>${t}</option>`).join("")}</select>
-      <p class="hint" style="margin:8px 0 0">택배는 불가하며 퀵 배달은 가능합니다 (퀵비용 별도, 받으시는 분 부담).</p>
-      <label class="row" style="gap:8px;margin-top:8px;padding:10px 12px;background:#fff5e1;border-radius:12px"><input type="checkbox" id="quickChk" style="width:20px;height:20px" ${cartForm.quick?"checked":""}><b>퀵 배달로 받을게요</b> <span class="hint">(위에 고른 날짜와 시간에 보내드립니다)</span></label>
-      <div id="quickBox" ${cartForm.quick?"":"hidden"} style="margin-top:6px"><label class="f">받으실 주소</label><input id="quickAddr" value="${esc(cartForm.quickAddr)}" placeholder="예: 서울 종로구 ○○동 ○○아파트 101동 101호"></div>
     </div>
     <div class="card"><h3>입금 안내</h3>
       <div class="emph">입금하실 때 <u>입금자명</u>을 아래에 적으신 이름과 똑같이 입력해 주세요. 입금자명이 다르면 입금 확인이 늦어질 수 있습니다.</div>
       <label class="f">입금자명 (입금하실 때 쓰실 이름)</label>
       <input id="depositor" value="${esc(cartForm.depositor)}" placeholder="예: 홍길동">
       <label class="f">요청사항 (선택)</label>
-      <input id="memo" value="${esc(cartForm.memo)}" placeholder="기타 요청 (퀵 배달은 위에서 체크)">
+      <input id="memo" value="${esc(cartForm.memo)}" placeholder="기타 요청">
       <div style="margin-top:12px"><button class="ghost" id="acctBtn" style="width:100%;border-color:var(--tc);color:var(--tc)">입금계좌 확인하기</button></div>
     </div>
     ${closed ? `<div class="emph">예약 접수가 마감되었습니다.</div>` : ""}
@@ -660,8 +657,6 @@ function renderCartTab(body){
   $("#timeSel").onchange = e => { cartForm.pickupTime = e.target.value; saveCartLocal(); };
   $("#depositor").oninput = e => { cartForm.depositor = e.target.value; saveCartLocal(); };
   $("#memo").oninput = e => { cartForm.memo = e.target.value; saveCartLocal(); };
-  $("#quickChk").onchange = e => { cartForm.quick = e.target.checked; $("#quickBox").hidden = !cartForm.quick; saveCartLocal(); if(cartForm.quick) $("#quickAddr").focus(); };
-  $("#quickAddr").oninput = e => { cartForm.quickAddr = e.target.value; saveCartLocal(); };
   $("#acctBtn").onclick = () => accountModal(total, cartForm.depositor.trim());
   $("#submitBtn").onclick = submitOrder;
 }
@@ -672,14 +667,13 @@ async function submitOrder(){
   if(!cartForm.pickupDate) return toast("픽업 날짜를 선택해 주세요");
   if(!cartForm.pickupTime) return toast("픽업 시간대를 선택해 주세요");
   const dep = cartForm.depositor.trim(); if(!dep) return toast("입금자명을 입력해 주세요");
-  const quick = !!cartForm.quick, quickAddr = (cartForm.quickAddr||"").trim(); if(quick && !quickAddr) return toast("퀵 배달을 받으실 주소를 입력해 주세요");
   if(orderClosed()) return toast("예약 접수가 마감되었습니다");
   // 남은 수량 확인 (최신 값으로)
   try { const st = await DB.get(C.meta, "stock"); STOCK = (st && st.reserved) || {}; } catch(e){}
   for(const i of items){ const m = MENU.find(x => x.id === i.id); const rem = m ? remaining(m) : null; if(rem !== null && i.qty > rem){ render(); return toast(rem <= 0 ? `${i.name}은(는) 예약이 모두 찼습니다` : `${i.name}은(는) ${rem}개까지만 예약할 수 있습니다`); } }
   const ok = await new Promise(res => {
     openModal(`<h3>예약 신청</h3><div style="font-size:14px">${items.map(i => `${esc(i.name)} × ${i.qty}`).join("<br>")}<hr style="border:0;border-top:1px solid var(--line)">
-      합계 <b>${won(total)}</b><br>픽업 <b>${esc(fmtPickDate(cartForm.pickupDate))} ${esc(cartForm.pickupTime)}</b><br>입금자명 <b>${esc(dep)}</b>${quick ? `<br>퀵 배달 <b>${esc(quickAddr)}</b> <span class="hint">(퀵비용 별도)</span>` : ""}</div>
+      합계 <b>${won(total)}</b><br>픽업 <b>${esc(fmtPickDate(cartForm.pickupDate))} ${esc(cartForm.pickupTime)}</b><br>입금자명 <b>${esc(dep)}</b></div>
       <div class="acct" style="margin-top:12px"><div>${esc(S.bank)}</div><div class="num">${esc(S.account)}</div><div>예금주: ${esc(S.holder)}</div>
         <div style="margin-top:6px">입금하실 금액 <b style="color:var(--tc)">${won(total)}</b></div>
         <button class="sm" id="mCopyAcct" style="margin-top:8px">계좌 복사하기</button></div>
@@ -691,7 +685,7 @@ async function submitOrder(){
     $("#mOk").onclick = () => { closeModal(); res(true); };
   });
   if(!ok) return;
-  const order = { uid:user.uid, name:profile.name||"", phone:profile.phone||"", items, total, qtyTotal: cartQty(), pickupDate:cartForm.pickupDate, pickupTime:cartForm.pickupTime, depositor:dep, memo:cartForm.memo.trim(), quick, quickAddr: quick ? quickAddr : "", paid:false, paidAt:null, customerPaid:false, status:"active", createdAt:DB.ts(), updatedAt:DB.ts() };
+  const order = { uid:user.uid, name:profile.name||"", phone:profile.phone||"", items, total, qtyTotal: cartQty(), pickupDate:cartForm.pickupDate, pickupTime:cartForm.pickupTime, depositor:dep, memo:cartForm.memo.trim(), paid:false, paidAt:null, customerPaid:false, status:"active", createdAt:DB.ts(), updatedAt:DB.ts() };
   // 같은 픽업 날짜의 미입금 예약이 있으면 합산 제안
   const same = ORDERS.filter(o => o.status !== "cancelled" && !o.paid && o.pickupDate === order.pickupDate).sort((a,b) => (toDate(b.createdAt)||0) - (toDate(a.createdAt)||0))[0];
   let mergeInto = null;
@@ -710,10 +704,10 @@ async function submitOrder(){
       items.forEach(i => { const ex = merged.find(m => m.id === i.id); if(ex) ex.qty += i.qty; else merged.push({...i}); });
       const mTotal = merged.reduce((s,i) => s + i.price*i.qty, 0), mQty = merged.reduce((s,i) => s + i.qty, 0);
       const memo = [mergeInto.memo, order.memo].filter(Boolean).join(" / ");
-      await DB.update(C.orders, mergeInto.id, { items:merged, total:mTotal, qtyTotal:mQty, pickupTime:order.pickupTime, depositor:dep, memo, quick: mergeInto.quick || quick, quickAddr: quick ? quickAddr : (mergeInto.quickAddr||""), customerPaid:false, customerPaidAt:null, mergedAt:DB.ts(), updatedAt:DB.ts() });
+      await DB.update(C.orders, mergeInto.id, { items:merged, total:mTotal, qtyTotal:mQty, pickupTime:order.pickupTime, depositor:dep, memo, customerPaid:false, customerPaidAt:null, mergedAt:DB.ts(), updatedAt:DB.ts() });
       await bumpStock(Object.fromEntries(items.map(i => [i.id, i.qty])));
       await log("order_merge", `추가 주문 합산 +${won(total)} → ${won(mTotal)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(order.pickupDate)} ${order.pickupTime} (${mergeInto.id})`);
-      cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"", quick:false, quickAddr:"" }; saveCartLocal();
+      cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"" }; saveCartLocal();
       tab = "done"; render(); window.scrollTo(0,0);
       toast(`기존 예약에 합쳤습니다. 합계 ${won(mTotal)}`);
       return;
@@ -721,7 +715,7 @@ async function submitOrder(){
     const id = await DB.add(C.orders, order);
     await bumpStock(Object.fromEntries(items.map(i => [i.id, i.qty])));
     await log("order_create", `예약 신청 ${won(total)} / ${items.map(i => i.name+"×"+i.qty).join(", ")} / 픽업 ${fmtPickDate(order.pickupDate)} ${order.pickupTime} / 입금자명 ${dep} (${id})`);
-    cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"", quick:false, quickAddr:"" }; saveCartLocal();
+    cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:profile.name||"", memo:"" }; saveCartLocal();
     tab = "done"; render(); window.scrollTo(0,0);
     toast("예약이 신청되었습니다. 입금 후 확인을 기다려 주세요");
   } catch(e){ toast(authMsg(e)); }
