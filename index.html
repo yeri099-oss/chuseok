@@ -351,7 +351,8 @@ let cart = {};            // {menuId: qty}
 let cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"" };
 let tab = "order";
 let unsubs = [];
-let authMode = "signup";  // signup(주문자 정보 입력, 기본) | login | admin | reset
+let authMode = "guest";   // guest(로그인 없이 둘러보기, 기본) | signup(주문자 정보 입력) | login | admin | reset
+let pendingSubmit = false; // 주문 중 주문자 정보 입력 → 로그인 완료 후 예약 신청 이어서 진행
 const remembered = () => { try { return JSON.parse(localStorage.getItem("chuseokLast")||"null") || {}; } catch(e){ return {}; } };
 const remember = (name, phone) => { try { localStorage.setItem("chuseokLast", JSON.stringify({ name, phone })); } catch(e){} };
 let adminSort = { key:"createdAt", dir:-1 };
@@ -362,8 +363,11 @@ function log(type, detail){
   const d = { type, uid: user ? user.uid : null, name: isStaff ? "전화예약" : isAdmin ? "관리자" : (profile ? profile.name : (pendingSignup?pendingSignup.name:"")), phone: profile ? profile.phone : (pendingSignup?pendingSignup.phone:""), detail: detail||"", at: DB.ts() };
   return DB.add(C.logs, d).catch(e => console.warn("log fail", e));
 }
-function saveCartLocal(){ try{ if(user) localStorage.setItem("chuseokCart_"+user.uid, JSON.stringify({cart, cartForm})); }catch(e){} }
-function loadCartLocal(){ try{ const v = JSON.parse(localStorage.getItem("chuseokCart_"+user.uid)||"null"); if(v){ cart = v.cart||{}; cartForm = {...cartForm, ...(v.cartForm||{})}; } }catch(e){} }
+const cartKey = () => "chuseokCart_" + (user ? user.uid : "guest");
+function saveCartLocal(){ try{ localStorage.setItem(cartKey(), JSON.stringify({cart, cartForm})); }catch(e){} }
+function loadCartLocal(){ try{ const v = JSON.parse(localStorage.getItem(cartKey())||"null"); if(v){ cart = v.cart||{}; cartForm = {...cartForm, ...(v.cartForm||{})}; }
+  // 로그인 전에 담아둔 장바구니가 있으면 그것을 이어서 사용
+  if(user){ const g = JSON.parse(localStorage.getItem("chuseokCart_guest")||"null"); if(g && g.cart && Object.keys(g.cart).length){ cart = g.cart; cartForm = {...cartForm, ...(g.cartForm||{})}; localStorage.removeItem("chuseokCart_guest"); saveCartLocal(); } } }catch(e){} }
 const cartItems = () => MENU.filter(m => cart[m.id] > 0).map(m => ({ id:m.id, name:m.name, price:Number(m.price)||0, qty:cart[m.id] }));
 const cartTotal = () => cartItems().reduce((s,i) => s + i.price*i.qty, 0);
 const cartQty = () => cartItems().reduce((s,i) => s + i.qty, 0);
@@ -380,7 +384,13 @@ DB.onAuth(async u => {
   unsubs.forEach(f => f()); unsubs = [];
   user = u; profile = null; isAdmin = false; isStaff = false; ORDERS = []; LOGS = []; USERS = []; RESETS = [];
   window.__lockShown = false; window.__loadErr = "";
-  if(!u){ render(); return; }
+  if(!u){
+    if(!["order","cart","done"].includes(tab)) tab = "order";
+    cart = {}; cartForm = { pickupDate:"", pickupTime:"", depositor:"", memo:"" }; loadCartLocal();
+    unsubs.push(DB.listen(C.menu, null, d => { MENU = d.sort((a,b)=>(a.sort||0)-(b.sort||0)); render(); }, e => toast(authMsg(e))));
+    unsubs.push(DB.listen(C.meta, null, d => { const s = d.find(x => x.id==="settings"); S = s ? {...DEFAULT_SETTINGS, ...s} : {...DEFAULT_SETTINGS}; const st = d.find(x => x.id==="stock"); STOCK = (st && st.reserved) || {}; render(); }));
+    render(); return;
+  }
   isStaff = (u.email === STAFF_EMAIL);
   isAdmin = (u.email === ADMIN_EMAIL) || isStaff;
   try {
@@ -409,8 +419,10 @@ DB.onAuth(async u => {
         log("login", "로그인");   // 기다리지 않음
       }
       loadCartLocal();
-      unsubs.push(DB.listen(C.orders, {field:"uid",op:"==",value:u.uid}, d => { ORDERS = d; render(); }, e => toast(authMsg(e))));
-      tab = "order";
+      if(!cartForm.depositor) cartForm.depositor = profile.name || "";
+      let firstMine = true;
+      unsubs.push(DB.listen(C.orders, {field:"uid",op:"==",value:u.uid}, d => { ORDERS = d; render(); if(firstMine){ firstMine = false; if(pendingSubmit){ pendingSubmit = false; tab = "cart"; render(); submitOrder(); } } }, e => toast(authMsg(e))));
+      tab = pendingSubmit ? "cart" : "order";
     }
     unsubs.push(DB.listen(C.menu, null, d => { MENU = d.sort((a,b)=>(a.sort||0)-(b.sort||0)); render(); }, e => toast(authMsg(e))));
     unsubs.push(DB.listen(C.meta, null, d => { const s = d.find(x => x.id==="settings"); S = s ? {...DEFAULT_SETTINGS, ...s} : {...DEFAULT_SETTINGS}; const st = d.find(x => x.id==="stock"); STOCK = (st && st.reserved) || {}; render(); }));
@@ -503,7 +515,8 @@ async function doAdminLogin(id, pw){
 function render(){
   const app = $("#app");
   if(user === undefined) return;
-  if(!user){ renderAuth(app); return; }
+  if(!user){ if(authMode === "guest"){ app.dataset.authMode = ""; renderCustomer(app); } else { if(app.dataset.authMode === authMode && $("#authForm")) return; /* 품목·설정 갱신 때 입력 중인 로그인 화면을 지우지 않음 */ app.dataset.authMode = authMode; renderAuth(app); } return; }
+  app.dataset.authMode = "";
   if(!profile){ app.innerHTML = `<div class="loading" style="padding-top:120px"><img src="${LOGO}" alt="" style="width:64px;height:64px;border-radius:16px"><div style="margin-top:10px;color:var(--tc);font-weight:700">꽃밥에피다</div><div style="margin-top:4px">${window.__loadErr ? `<div style="color:#b3261e;font-weight:700;margin-bottom:8px">${esc(window.__loadErr)}</div><div class="hint">화면을 새로고침해 보시고, 계속되면 매장(02-766-6272)으로 연락해 주세요.</div><button class="ghost sm" id="loadErrOut" style="margin-top:10px">처음으로</button>` : "예약 정보를 불러오는 중…"}</div></div>`; const b = $("#loadErrOut"); if(b) b.onclick = () => { window.__loadErr = ""; DB.signOut(); }; return; }
   isAdmin ? renderAdmin(app) : renderCustomer(app);
 }
@@ -525,8 +538,9 @@ function renderAuth(app){
       <div style="text-align:center;margin-top:12px">
         ${m==="signup" ? `<button class="link" data-m="login" style="font-size:13px">전에 입력하셨나요? 전화번호와 비밀번호로 들어가기</button><br>` : ""}
         ${m==="login" ? `<button class="link" data-m="signup" style="font-size:13px">처음이신가요? 주문자 정보 입력</button><br>` : ""}
+        ${(m==="login"||m==="signup") ? `<button class="link" data-m="guest" style="font-size:13px">주문 화면으로 돌아가기</button><br>` : ""}
         ${(m==="login"||m==="signup") ? `<button class="link" data-m="reset" style="font-size:13px;color:var(--muted)">비밀번호를 잊으셨나요?</button><br>` : ""}
-        ${(m==="admin"||m==="reset") ? `<button class="link" data-m="signup">처음 화면으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
+        ${(m==="admin"||m==="reset") ? `<button class="link" data-m="guest">처음 화면으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
       </div>
     </div>
     <p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p>
@@ -551,12 +565,12 @@ function header(wide){
   return `<header class="top"><div class="in ${wide?"wide":""}">
     <div class="brand"><img src="${LOGO}" alt="" style="width:36px;height:36px;border-radius:8px"><div>꽃밥에피다<small>2026 추석 명절음식 예약${isStaff?" · 전화예약 입력":isAdmin?" · 관리자":""}</small></div></div>
     <div class="spacer"></div>
-    <div class="who"><b>${esc(profile.name||"")}</b>${profile.phone?"<br>"+esc(fmtPhone(profile.phone)):""}</div>
+    ${user ? `<div class="who"><b>${esc(profile.name||"")}</b>${profile.phone?"<br>"+esc(fmtPhone(profile.phone)):""}</div>
     ${isAdmin ? "" : `<button class="ghost sm" id="pwBtn">비밀번호 변경</button>`}
-    <button class="ghost sm" id="logoutBtn">로그아웃</button>
+    <button class="ghost sm" id="logoutBtn">로그아웃</button>` : `<button class="ghost sm" data-m="login" id="loginBtn" style="border-color:var(--tc);color:var(--tc)">예약 확인 / 로그인</button>`}
   </div></header>`;
 }
-function bindHeader(){ const pb = $("#pwBtn"); if(pb) pb.onclick = pwChangeModal; $("#logoutBtn").onclick = async () => { if(await confirmModal("로그아웃", "로그아웃 하시겠습니까?")) { saveCartLocal(); authMode="signup"; await DB.signOut(); } }; }
+function bindHeader(){ const pb = $("#pwBtn"); if(pb) pb.onclick = pwChangeModal; const lb = $("#logoutBtn"); if(lb) lb.onclick = async () => { if(await confirmModal("로그아웃", "로그아웃 하시겠습니까?")) { saveCartLocal(); authMode="guest"; await DB.signOut(); } }; const li = $("#loginBtn"); if(li) li.onclick = () => { authMode = "login"; render(); window.scrollTo(0,0); }; }
 
 function renderCustomer(app){
   const tabs = [["order","주문"],["cart","장바구니"],["done","예약완료"]];
@@ -567,12 +581,40 @@ function renderCustomer(app){
   bindHeader();
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0,0); });
   const body = $("#body");
-  body.innerHTML = `<div class="mobile-who hint" style="padding:8px 2px 0"><b style="color:var(--ink)">${esc(profile.name||"")}</b>님 ${esc(fmtPhone(profile.phone||""))}</div>`;
-  if(profile.tempPassword){ body.innerHTML += `<div class="emph" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1">임시 비밀번호(${TEMP_PW})로 로그인하셨습니다. 새 비밀번호로 바꿔 주세요.</span><button class="sm" id="pwBanner">비밀번호 변경</button></div>`; $("#pwBanner").onclick = pwChangeModal; }
+  body.innerHTML = user ? `<div class="mobile-who hint" style="padding:8px 2px 0"><b style="color:var(--ink)">${esc(profile.name||"")}</b>님 ${esc(fmtPhone(profile.phone||""))}</div>` : `<div class="mobile-who hint" style="padding:8px 2px 0">둘러보시다가 <b style="color:var(--ink)">예약 신청</b>할 때 이름과 전화번호를 입력하시면 됩니다.</div>`;
+  if(user && profile.tempPassword){ body.innerHTML += `<div class="emph" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1">임시 비밀번호(${TEMP_PW})로 로그인하셨습니다. 새 비밀번호로 바꿔 주세요.</span><button class="sm" id="pwBanner">비밀번호 변경</button></div>`; $("#pwBanner").onclick = pwChangeModal; }
   const wrap = document.createElement("div"); body.appendChild(wrap);
   if(tab==="order") renderOrderTab(wrap);
   else if(tab==="cart") renderCartTab(wrap);
   else renderDoneTab(wrap);
+  if(!user){ const f = document.createElement("p"); f.className = "hint"; f.style.cssText = "text-align:center;margin:24px 0 8px"; f.innerHTML = `문의: ${esc(S.phone)} &nbsp;·&nbsp; <button class="link" data-m="admin" style="color:var(--muted);font-size:12px;text-decoration:none">관리자 로그인</button>`; body.appendChild(f); f.querySelector("[data-m]").onclick = () => { authMode = "admin"; render(); window.scrollTo(0,0); }; }
+}
+// 주문 중 주문자 정보 입력(비로그인 → 가입 또는 로그인). 완료되면 onAuth에서 예약 신청을 이어서 진행
+function guestSignupModal(){
+  const r = remembered();
+  openModal(`<h3>주문자 정보 입력</h3><p class="hint" style="margin:0 0 6px">처음이시면 아래 정보가 저장되고, 이미 입력하셨던 분은 같은 정보로 바로 이어집니다. 비밀번호는 다음에 예약을 확인하러 들어오실 때 쓰입니다.</p>
+    <form id="gForm" autocomplete="on"><label class="f">이름</label><input id="gName" autocomplete="name" placeholder="주문하시는 분 이름" value="${esc(r.name||"")}">
+    <label class="f">전화번호</label><input id="gPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-1234-5678" value="${esc(fmtPhone(r.phone||""))}">
+    <label class="f">비밀번호 <span style="font-weight:400">(6자리 이상)</span></label><div style="position:relative"><input id="gPw" type="password" autocomplete="new-password" style="padding-right:56px"><button type="button" class="link" id="gEye" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:13px;text-decoration:none;color:var(--muted)">보기</button></div>
+    <p class="hint" style="margin:8px 0 0">예약 확인 연락을 위해 실제 사용하시는 전화번호를 입력해 주세요.</p>
+    <div class="err" id="gErr"></div>
+    <div class="btns"><button type="button" class="ghost" id="mCancel">취소</button><button type="submit" id="gBtn">입력하고 예약 신청</button></div></form>
+    <p style="text-align:center;margin:10px 0 0"><button type="button" class="link" id="gReset" style="font-size:13px;color:var(--muted)">비밀번호를 잊으셨나요?</button></p>`);
+  $("#gEye").onclick = () => { const i = $("#gPw"); i.type = i.type==="password" ? "text" : "password"; $("#gEye").textContent = i.type==="password" ? "보기" : "숨김"; };
+  $("#mCancel").onclick = closeModal;
+  $("#gReset").onclick = () => { closeModal(); saveCartLocal(); authMode = "reset"; render(); };
+  setTimeout(() => { const f = !$("#gName").value ? $("#gName") : !$("#gPhone").value ? $("#gPhone") : $("#gPw"); if(f) f.focus(); }, 50);
+  $("#gForm").onsubmit = async ev => {
+    ev.preventDefault(); const btn = $("#gBtn"); btn.disabled = true; $("#gErr").textContent = "";
+    try {
+      const name = $("#gName").value.trim(), phone = $("#gPhone").value, pw = $("#gPw").value;
+      remember(name, digits(phone)); saveCartLocal();
+      if(!cartForm.depositor.trim()) cartForm.depositor = name;
+      pendingSubmit = true;
+      await doSignup(name, phone, pw);
+      closeModal();
+    } catch(e){ pendingSubmit = false; $("#gErr").textContent = typeof e === "string" ? e : authMsg(e); btn.disabled = false; }
+  };
 }
 function pickupChangeModal(o){
   if(pickupChangeClosed()) return toast(changesLocked() ? "마감 후에는 전화(02-766-6272)로만 변경 가능합니다" : "픽업 변경 가능 기간이 지났습니다");
@@ -625,7 +667,7 @@ function renderOrderTab(body){
 
 function renderCartTab(body){
   const items = cartItems(); const total = cartTotal(); const closed = orderClosed();
-  if(!cartForm.depositor && profile.name) cartForm.depositor = profile.name;
+  if(!cartForm.depositor && profile && profile.name) cartForm.depositor = profile.name;
   const slots = timeSlots(S);
   body.innerHTML = `
     <div class="card"><h3>담은 품목</h3>
@@ -644,7 +686,7 @@ function renderCartTab(body){
     <div class="card"><h3>입금 안내</h3>
       <div class="emph">입금하실 때 <u>입금자명</u>을 아래에 적으신 이름과 똑같이 입력해 주세요. 입금자명이 다르면 입금 확인이 늦어질 수 있습니다.</div>
       <label class="f">입금자명 (입금하실 때 쓰실 이름)</label>
-      <input id="depositor" value="${esc(cartForm.depositor)}" placeholder="예: 홍길동">
+      <input id="depositor" value="${esc(cartForm.depositor)}" placeholder="${user ? "예: 홍길동" : "비우면 주문자 이름과 같게"}">
       <label class="f">요청사항 (선택)</label>
       <input id="memo" value="${esc(cartForm.memo)}" placeholder="기타 요청">
       <div style="margin-top:12px"><button class="ghost" id="acctBtn" style="width:100%;border-color:var(--tc);color:var(--tc)">입금계좌 확인하기</button></div>
@@ -666,8 +708,9 @@ async function submitOrder(){
   if(!items.length) return toast("담긴 품목이 없습니다");
   if(!cartForm.pickupDate) return toast("픽업 날짜를 선택해 주세요");
   if(!cartForm.pickupTime) return toast("픽업 시간대를 선택해 주세요");
-  const dep = cartForm.depositor.trim(); if(!dep) return toast("입금자명을 입력해 주세요");
   if(orderClosed()) return toast("예약 접수가 마감되었습니다");
+  if(!user){ saveCartLocal(); guestSignupModal(); return; }
+  const dep = cartForm.depositor.trim(); if(!dep) return toast("입금자명을 입력해 주세요");
   // 남은 수량 확인 (최신 값으로)
   try { const st = await DB.get(C.meta, "stock"); STOCK = (st && st.reserved) || {}; } catch(e){}
   for(const i of items){ const m = MENU.find(x => x.id === i.id); const rem = m ? remaining(m) : null; if(rem !== null && i.qty > rem){ render(); return toast(rem <= 0 ? `${i.name}은(는) 예약이 모두 찼습니다` : `${i.name}은(는) ${rem}개까지만 예약할 수 있습니다`); } }
@@ -722,6 +765,7 @@ async function submitOrder(){
 }
 
 function renderDoneTab(body){
+  if(!user){ body.innerHTML = `<div class="card" style="text-align:center;padding:30px"><div style="font-size:30px">🧺</div><p>예약하실 때 입력하신 <b>전화번호와 비밀번호</b>로 들어오시면 예약 내용을 확인할 수 있습니다.</p><button id="toLogin">예약 확인하러 가기</button><p class="hint" style="margin:14px 0 0">아직 예약 전이시면 주문 탭에서 품목을 담고 예약 신청해 주세요.<br>매장에서 전화로 예약하신 분은 핸드폰번호와 임시 비밀번호 ${TEMP_PW}으로 들어오실 수 있습니다.</p></div>`; $("#toLogin").onclick = () => { authMode = "login"; render(); window.scrollTo(0,0); }; return; }
   const list = [...ORDERS].sort((a,b) => (toDate(b.createdAt)||0) - (toDate(a.createdAt)||0));
   if(!list.length){ body.innerHTML = `<div class="card" style="text-align:center;padding:30px"><div style="font-size:30px">🧺</div><p>아직 신청하신 예약이 없습니다.</p><button id="toOrder">주문하러 가기</button></div><p style="text-align:center"><button class="ghost sm" id="pwChange">비밀번호 변경</button></p>`; $("#toOrder").onclick = () => { tab="order"; render(); }; $("#pwChange").onclick = pwChangeModal; return; }
   const lockBanner = changesLocked() ? `<div class="emph" style="border-color:#e0a1a1;background:#fdecec;color:#8a2c2c;font-size:15px">예약 접수가 ${esc(lockedUntilText())}에 마감되어 앱에서는 변경과 취소가 되지 않습니다.<br>변경이나 취소가 필요하시면 매장으로 전화 주세요. <b>02-766-6272</b></div>` : "";
