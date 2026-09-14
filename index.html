@@ -158,13 +158,15 @@ nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;b
 table{border-collapse:collapse;width:100%;font-size:13px;min-width:900px}
 th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
 #listArea table{min-width:0;table-layout:auto}
-#listArea th,#listArea td{padding:7px 6px;white-space:nowrap;vertical-align:middle}
-#listArea td.items{white-space:pre-line;min-width:150px;line-height:1.35}
-#listArea td.memo{white-space:normal;min-width:90px;max-width:160px}
+#listArea th,#listArea td{padding:6px 5px;white-space:nowrap;vertical-align:middle}
+#listArea td.items{white-space:pre-line;min-width:120px;line-height:1.3;font-size:12.5px}
+#listArea td.memo{white-space:normal;min-width:70px;max-width:140px;word-break:break-all}
 #listArea td .pill{white-space:nowrap}
 #listArea td.acts{white-space:nowrap;width:1%}
-#listArea td.acts button{display:block;width:100%;margin:2px 0;padding:4px 8px;font-size:12px}
-@media(min-width:1100px){#listArea td.acts button{display:inline-block;width:auto;margin:0 2px}}
+#listArea td.acts{min-width:92px}
+#listArea td.acts button{display:inline-block;width:43px;margin:2px 1px;padding:4px 2px;font-size:12px;text-align:center}
+@media(min-width:1280px){#listArea td.acts button{display:inline-block;width:auto;margin:0 2px}}
+@media(max-width:1100px){#listArea table{font-size:12px} #listArea th,#listArea td{padding:5px 4px} #listArea td.items{min-width:100px;font-size:12px} #listArea td.memo{max-width:110px;font-size:11px} #listArea .pill{padding:1px 6px;font-size:11px}}
 th{background:#f6f1eb;position:sticky;top:0;cursor:pointer;user-select:none;font-weight:700}
 th .arr{color:var(--tc);margin-left:4px}
 td.items{white-space:pre-line;min-width:180px}
@@ -220,7 +222,7 @@ const DEFAULT_MENU = [
 ];
 const DEFAULT_SETTINGS = {
   bank:"기업은행", account:"02409732104031", holder:"꽃밥이야기",
-  deadline:"2026-09-20T20:00", orderOpen:true,
+  deadline:"2026-09-20T20:00", orderOpen:true, showPickedUp:false,
   cancelUntil:"", cancelPaid:false, pickupChangeUntil:"", lockAfterClose:true, unpaidWarnHours:24, remainShowAt:20, urgentAt:10,
   pickupDates:["2026-09-23","2026-09-24"], timeStart:12, timeEnd:19,
   limitNote:"100세트 한정 선착순 마감 (예약 수량 외 추가 구입 불가)",
@@ -887,7 +889,8 @@ function renderAdmin(app){
   ({list:renderAdminList, summary:renderAdminSummary, menu:renderAdminMenu, settings:renderAdminSettings, log:renderAdminLog}[tab]||renderAdminList)(body);
 }
 
-const COLS = [["name","주문자명"],["phone","전화번호"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계"],["pickupDate","픽업날짜"],["pickupTime","픽업시간"],["depositor","입금자명"],["paid","입금여부"],["pickedUp","수령"],["memo","요청사항"]];
+const COLS_BASE = [["name","주문자 / 전화"],["itemsText","예약품목"],["qtyTotal","수량"],["total","합계"],["pickupDate","픽업"],["depositor","입금자명"],["paid","입금여부"],["pickedUp","수령"],["memo","요청사항"]];
+const COLS = { get cols(){ return COLS_BASE.filter(([k]) => k !== "pickedUp" || S.showPickedUp); }, map(f){ return this.cols.map(f); }, get length(){ return this.cols.length; } };
 const unpaidDays = o => { if(o.paid || o.customerPaid || o.status === "cancelled") return 0; const d = toDate(o.createdAt); if(!d) return 0; const h = (Date.now() - d.getTime())/36e5; const warn = Number(S.unpaidWarnHours)||24; return h >= warn ? Math.max(1, Math.floor(h/24)) : 0; };
 function orderRows(){
   return ORDERS.map(o => ({ ...o, itemsText:(o.items||[]).map(i => `${i.name} ${i.qty}`).join("\n"), createdMs: toDate(o.createdAt)?toDate(o.createdAt).getTime():0, phoneText: fmtPhone(o.phone) }));
@@ -898,7 +901,7 @@ function filteredRows(){
   const q = adminQ.trim().toLowerCase();
   if(q){ rows = rows.filter(r => [r.name, r.phone, r.phoneText, r.itemsText, r.qtyTotal, r.total, fmtPickDate(r.pickupDate), r.pickupDate, r.pickupTime, r.depositor, r.paid?"입금완료 완료 o":(r.customerPaid?"고객입금표시 입금했음 확인중":"미입금 대기 x"), r.pickedUp?"수령완료 수령":"미수령", unpaidDays(r)?"미입금경과 오래":"", fmtDT(r.createdAt), r.memo, r.status==="cancelled"?"취소":"", r.source==="phone"?"전화":"앱", r.quick?"퀵 퀵배달 배달 "+(r.quickAddr||""):""].join(" ").toLowerCase().includes(q)); }
   const k = adminSort.key, d = adminSort.dir;
-  rows.sort((a,b) => { let x = a[k], y = b[k]; if(k==="createdAt"){ x=a.createdMs; y=b.createdMs; } if(k==="paid"){ x = a.paid?2:(a.customerPaid?1:0); y = b.paid?2:(b.customerPaid?1:0); } if(k==="pickedUp"){ x = a.pickedUp?1:0; y = b.pickedUp?1:0; } if(typeof x==="number"||typeof y==="number") return ((x||0)-(y||0))*d; return String(x||"").localeCompare(String(y||""),"ko")*d; });
+  rows.sort((a,b) => { let x = a[k], y = b[k]; if(k==="createdAt"){ x=a.createdMs; y=b.createdMs; } if(k==="paid"){ x = a.paid?2:(a.customerPaid?1:0); y = b.paid?2:(b.customerPaid?1:0); } if(k==="pickedUp"){ x = a.pickedUp?1:0; y = b.pickedUp?1:0; } if(k==="pickupDate"){ x = (a.pickupDate||"9")+(a.pickupTime||"9"); y = (b.pickupDate||"9")+(b.pickupTime||"9"); } if(typeof x==="number"||typeof y==="number") return ((x||0)-(y||0))*d; return String(x||"").localeCompare(String(y||""),"ko")*d; });
   return rows;
 }
 function renderAdminList(body){
@@ -929,9 +932,9 @@ function renderListTable(){
   const rc = $("#rowCount"); if(rc) rc.textContent = rows.length + "건";
   area.innerHTML = `<div class="tblwrap"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}">${l}${adminSort.key===k?`<span class="arr">${adminSort.dir>0?"▲":"▼"}</span>`:""}</th>`).join("")}<th></th></tr></thead>
     <tbody>${rows.map(r => `<tr class="${r.status==="cancelled"?"cancelled":""} ${r.paid?"paid":""} ${unpaidDays(r)?"stale":""} ${r.pickedUp?"picked":""}">
-      <td><b>${esc(r.name)}</b><br>${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}${quickPill(r)}${r.status==="cancelled"?` <span class="pill cancel">취소</span>${r.cancelReason?`<div class="hint" style="font-size:11px;white-space:normal;text-decoration:none">${esc(r.cancelReason)}</div>`:""}`:""}</td><td>${esc(r.phoneText)}</td><td class="items">${esc(r.itemsText)}</td><td>${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${r.pickupDate ? esc(fmtPickDate(r.pickupDate)) : `<span class="hint">미정</span>`}</td><td>${r.pickupTime ? esc(r.pickupTime) : `<span class="hint">미정</span>`}</td><td>${esc(r.depositor)}</td>
+      <td><b>${esc(r.name)}</b><br>${r.source==="phone" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">전화</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">앱</span>`}${quickPill(r)}${r.status==="cancelled"?` <span class="pill cancel">취소</span>${r.cancelReason?`<div class="hint" style="font-size:11px;white-space:normal;text-decoration:none">${esc(r.cancelReason)}</div>`:""}`:""}<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(r.phoneText)}</div></td><td class="items">${esc(r.itemsText)}</td><td style="text-align:center">${r.qtyTotal||0}</td><td>${won(r.total)}</td><td>${r.pickupDate ? esc(fmtPickDate(r.pickupDate)) : `<span class="hint">미정</span>`}<br><span style="font-size:12px">${r.pickupTime ? esc(r.pickupTime) : `<span class="hint">미정</span>`}</span></td><td>${esc(r.depositor)}</td>
       <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-paid="${r.id}" ${r.paid?"checked":""}>${r.paid?`<span class="pill ok">입금완료</span>`:r.customerPaid?`<span class="pill" style="background:#e8f0fb;color:#2b5aa6" title="고객이 입금완료를 표시함 ${fmtDT(r.customerPaidAt)}">고객 입금표시</span>`:`<span class="pill wait">대기</span>`}</label>${unpaidDays(r) ? `<div style="font-size:11px;color:#b3741f;font-weight:700;margin-top:2px">미입금 ${unpaidDays(r)}일째</div>` : ""}${(!isStaff && !r.paid && prepayFor(r).length) ? prepayFor(r).map(pp => `<div style="margin-top:4px"><span class="pill" style="background:#e6f4ec;color:#2f8f5b">선입금 ${won(pp.amount)}${pp.paidOn?" "+esc(pp.paidOn):""}${Number(pp.amount)!==Number(r.total)?" (금액 다름)":""}</span> <button class="sm" data-ppmatch="${pp.id}" data-order="${r.id}" style="padding:3px 8px;font-size:12px">이 입금으로 확인</button></div>`).join("") : ""}`}</td>
-      <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-picked="${r.id}" ${r.pickedUp?"checked":""}>${r.pickedUp?`<span class="pill ok">수령</span>`:`<span class="hint">미수령</span>`}</label>`}</td>
+      ${S.showPickedUp ? `<td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-picked="${r.id}" ${r.pickedUp?"checked":""}>${r.pickedUp?`<span class="pill ok">수령</span>`:`<span class="hint">미수령</span>`}</label>`}</td>` : ""}
       <td class="memo" style="font-size:12px" title="신청 ${fmtDT(r.createdAt)}">${r.quick ? `<div style="color:#b3741f;font-weight:700">퀵 배달 ${esc(r.quickAddr||"(주소 없음)")}</div>` : ""}${esc(r.memo||"")}</td>
       <td class="nol acts"><button class="ghost sm" data-edit="${r.id}">수정</button>${r.status==="cancelled" ? `<button class="ghost sm" data-restore="${r.id}">복구</button>` : `<button class="ghost sm" data-cancelo="${r.id}">취소</button>`}${(!isStaff && r.phone && !USERS.some(u => u.phone === r.phone && !u.replacedBy)) ? `<button class="ghost sm" data-acct="${r.id}" title="고객이 링크로 확인할 수 있게 계정 만들기">계정</button>` : ""}${isStaff ? "" : `<button class="ghost sm" data-del="${r.id}" style="color:var(--danger)">삭제</button>`}</td></tr>`).join("")}
       ${rows.length===0 ? `<tr><td colspan="${COLS.length+1}" class="hint" style="text-align:center;padding:30px">예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
@@ -1292,7 +1295,8 @@ function renderAdminSettings(body){
       <label class="f">문의 전화</label><input id="sPhone" value="${esc(S.phone)}"></div>
     <div class="card"><h3>픽업</h3>
       <label class="f">픽업 가능 날짜 (쉼표로 구분, 예: 2026-09-23, 2026-09-24)</label><input id="sDates" value="${esc((S.pickupDates||[]).join(", "))}">
-      <div class="row"><div style="flex:1"><label class="f">시작 시(24시간)</label><input id="sStart" type="number" value="${S.timeStart}"></div><div style="flex:1"><label class="f">종료 시(24시간)</label><input id="sEnd" type="number" value="${S.timeEnd}"></div></div></div>
+      <div class="row"><div style="flex:1"><label class="f">시작 시(24시간)</label><input id="sStart" type="number" value="${S.timeStart}"></div><div style="flex:1"><label class="f">종료 시(24시간)</label><input id="sEnd" type="number" value="${S.timeEnd}"></div></div>
+      <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="sShowPicked" style="width:18px" ${S.showPickedUp?"checked":""}>명단에 '수령' 체크 칸 표시 (픽업 당일에 켜세요. 평소에는 꺼 두면 명단이 좁은 화면에도 들어갑니다)</label></div>
     <div class="card"><h3>안내문 (주문 화면 상단)</h3><textarea id="sNotice" style="min-height:200px">${esc(S.notice)}</textarea>
       <label class="f">꽃밥에서 사용하는 재료들</label><textarea id="sMat">${esc(S.materials||"")}</textarea></div>
     <button id="saveS" style="width:100%;padding:13px">설정 저장</button>
@@ -1310,7 +1314,7 @@ function renderAdminSettings(body){
   body.querySelectorAll("[data-udel]").forEach(b => b.onclick = () => adminDeleteUser(b.dataset.udel));
   body.querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => { await DB.del(C.resets, b.dataset.rdel); });
   $("#saveS").onclick = async () => {
-    const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, deadline:$("#sDeadline").value, cancelUntil:$("#sCancelUntil").value, cancelPaid:$("#sCancelPaid").checked, pickupChangeUntil:$("#sPickUntil").value, lockAfterClose:$("#sLock").checked, unpaidWarnHours:Number($("#sUnpaidH").value)||24, remainShowAt:Number($("#sRemainAt").value)||20, urgentAt:Number($("#sUrgentAt").value)||10, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
+    const data = { bank:$("#sBank").value.trim(), account:digits($("#sAcct").value)||$("#sAcct").value.trim(), holder:$("#sHolder").value.trim(), orderOpen:$("#sOpen").checked, showPickedUp:$("#sShowPicked").checked, deadline:$("#sDeadline").value, cancelUntil:$("#sCancelUntil").value, cancelPaid:$("#sCancelPaid").checked, pickupChangeUntil:$("#sPickUntil").value, lockAfterClose:$("#sLock").checked, unpaidWarnHours:Number($("#sUnpaidH").value)||24, remainShowAt:Number($("#sRemainAt").value)||20, urgentAt:Number($("#sUrgentAt").value)||10, limitNote:$("#sLimit").value.trim(), phone:$("#sPhone").value.trim(),
       pickupDates:$("#sDates").value.split(",").map(s=>s.trim()).filter(Boolean), timeStart:Number($("#sStart").value)||12, timeEnd:Number($("#sEnd").value)||19, notice:$("#sNotice").value, materials:$("#sMat").value, updatedAt:DB.ts() };
     if(data.timeEnd <= data.timeStart) return toast("종료 시는 시작 시보다 커야 합니다");
     try { await DB.set(C.meta, "settings", data, true); await log("settings_save", "설정 저장"); toast("설정이 저장되었습니다"); } catch(e){ toast(authMsg(e)); }
