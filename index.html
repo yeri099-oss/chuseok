@@ -196,6 +196,15 @@ tr.picked td{background:#f0f0f0;color:#777}
 window.__loadingNote = function(msg, isErr){ var app = document.getElementById("app"); if(!app || !app.querySelector(".loading")) return; var d = app.querySelector(".loading"); var n = document.createElement("div"); n.style.cssText = "margin:14px auto 0;max-width:340px;font-size:13px;line-height:1.5;color:" + (isErr ? "#b3261e" : "#7a716a"); n.innerHTML = msg; d.appendChild(n); };
 window.addEventListener("error", function(e){ if(e.error && e.error.__quiet) return; window.__loadingNote("오류: " + (e.message || "알 수 없는 오류") + (e.lineno ? " (줄 " + e.lineno + ")" : "") + "<br>이 화면을 캡처해서 담당자에게 보내 주세요.", true); });
 </script>
+<script>
+// 진단 기록: 접속·로그인 과정에서 무슨 일이 있었는지 남겨 두고, 로그인 화면의 '진단' 링크로 볼 수 있음
+window.__t0 = Date.now(); window.__dbg = [];
+window.dbg = function(m){ try { window.__dbg.push(((Date.now() - window.__t0)/1000).toFixed(1) + "s " + m); if(window.__dbg.length > 60) window.__dbg.shift(); var b = document.getElementById("dbgBox"); if(b) b.textContent = window.__dbg.join("\n"); } catch(e){} };
+window.addEventListener("error", function(e){ window.dbg("오류 " + (e.message||"") + " 줄" + (e.lineno||"")); });
+window.addEventListener("unhandledrejection", function(e){ var r = e.reason; window.dbg("거부 " + ((r && (r.code || r.message)) || r)); });
+window.addEventListener("pageshow", function(e){ window.dbg("pageshow" + (e.persisted ? "(캐시)" : "")); });
+window.dbg("페이지 시작 " + (navigator.userAgent.match(/iPhone|Android|Macintosh|Windows/) || [""])[0]);
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
@@ -245,7 +254,9 @@ if (!DEMO) {
   const auth = firebase.auth(app);
   const fs = firebase.firestore(app);
   // 오프라인 캐시: 재접속 때 품목 사진·설정을 기기에 저장된 것부터 바로 보여주고 서버 변경분만 받아옴
-  try { fs.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch(e){}
+  // 오프라인 캐시는 한 탭에서만(다른 탭이 이미 쓰고 있으면 이 탭은 캐시 없이 동작). 여러 탭을 묶어 두면 사파리에서 멈춘 탭 때문에 같이 멈추는 일이 있어 끔.
+  try { fs.enablePersistence().then(() => dbg("캐시 사용")).catch(e => dbg("캐시 없이 " + (e && e.code))); } catch(e){}
+  dbg("파이어베이스 준비");
   const conv = d => ({ id:d.id, ...d.data() });
   const tagErr = (col,op,p) => p.catch(e => { if(e && typeof e === 'object'){ e.col = col; e.op = op; } throw e; });
   DB = {
@@ -405,7 +416,7 @@ let authFired = false;
 setTimeout(() => { if(authFired) return; try { if(authMode === "guest" && !user){ unsubs.push(DB.listen(C.menu, null, d => { MENU = d.sort((a,b)=>(a.sort||0)-(b.sort||0)); if(!authFired) render(); })); unsubs.push(DB.listen(C.meta, null, d => { const s = d.find(x => x.id==="settings"); S = s ? {...DEFAULT_SETTINGS, ...s} : {...DEFAULT_SETTINGS}; if(!authFired) render(); })); render(); toast("접속이 평소보다 오래 걸리고 있습니다. 계속 그러면 브라우저 탭을 닫고 다시 열어 주세요"); } } catch(e){ console.warn(e); } }, 6000);
 setTimeout(() => { if(!authFired) window.__loadingNote("로그인 상태 확인이 오래 걸리고 있습니다.<br>브라우저 탭을 완전히 닫고 다시 열거나, 사파리 설정에서 이 사이트의 데이터를 지운 뒤 다시 접속해 주세요.", false); }, 4000);
 DB.onAuth(async u => {
-  authFired = true;
+  authFired = true; dbg("로그인 상태: " + (u ? (u.email||"").split("@")[0] : "없음"));
   unsubs.forEach(f => f()); unsubs = [];
   user = u; profile = null; isAdmin = false; isStaff = false; ORDERS = []; LOGS = []; USERS = []; RESETS = [];
   window.__lockShown = false; window.__loadErr = "";
@@ -522,7 +533,8 @@ async function changeMyPassword(pw){
 async function doAdminLogin(id, pw){
   if(id.trim() !== ADMIN_ID) throw "관리자 아이디가 맞지 않습니다.";
   if(!pw) throw "비밀번호를 입력해 주세요.";
-  try { await DB.signIn(ADMIN_EMAIL, pw); }
+  dbg("관리자 로그인 시도");
+  try { await DB.signIn(ADMIN_EMAIL, pw); dbg("관리자 로그인 성공"); }
   catch(e){
     const c = e.code||"";
     if(c.includes("user-not-found") || c.includes("invalid-credential") || c.includes("invalid-login") || c.includes("wrong-password")){
@@ -532,7 +544,7 @@ async function doAdminLogin(id, pw){
       // 최초 1회: 관리자 계정이 아직 없으면 지금 입력한 비밀번호로 생성
       try { await DB.signUp(ADMIN_EMAIL, pw, "관리자"); toast("관리자 계정을 처음 만들었습니다"); }
       catch(e2){ if((e2.code||"").includes("email-already-in-use")) throw "비밀번호가 맞지 않습니다."; throw e2; }
-    } else throw e;
+    } else { dbg("관리자 로그인 실패 " + (e.code||e.message||e)); throw e; }
   }
   setTimeout(() => log("admin_login", "관리자 로그인"), 500);
 }
@@ -560,6 +572,7 @@ function renderAuth(app){
         ${m==="signup" ? `<p class="hint" style="margin:8px 0 0">예약 확인 연락을 위해 실제 사용하시는 전화번호를 입력해 주세요. 비밀번호는 다음에 예약을 확인하러 들어오실 때 쓰입니다.</p>` : ""}
         <div class="err" id="aErr"></div>
         <button class="main" type="submit" id="aBtn">${m==="signup" ? "입력하고 주문하기" : m==="reset" ? "담당자에게 초기화 요청하기" : "들어가기"}</button>
+        <div class="hint" id="aWait" style="text-align:center;margin-top:6px;min-height:18px"></div>
       </form>
       <div style="text-align:center;margin-top:12px">
         ${m==="signup" ? `<button class="link" data-m="login" style="font-size:13px">전에 입력하셨나요? 전화번호와 비밀번호로 들어가기</button><br>` : ""}
@@ -569,12 +582,16 @@ function renderAuth(app){
         ${(m==="admin"||m==="reset") ? `<button class="link" data-m="guest">처음 화면으로 돌아가기</button>` : `<button class="link" data-m="admin" style="color:var(--muted);font-size:13px;text-decoration:none">관리자 로그인</button>`}
       </div>
     </div>
-    <p class="hint" style="text-align:center">문의: ${esc(S.phone)}</p>
+    <p class="hint" style="text-align:center">문의: ${esc(S.phone)} ${m==="admin" ? `&nbsp;·&nbsp; <button class="link" id="dbgToggle" style="font-size:12px;color:var(--muted);text-decoration:none">진단</button>` : ""}</p>
+    <pre id="dbgBox" hidden style="font-size:11px;white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;color:#555">${esc((window.__dbg||[]).join("\n"))}</pre>
   </div>`;
+  const dt = $("#dbgToggle"); if(dt) dt.onclick = () => { const b = $("#dbgBox"); b.hidden = !b.hidden; b.textContent = (window.__dbg||[]).join("\n"); };
   app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { authMode = b.dataset.m; render(); });
   const eye = $("#aEye"); if(eye) eye.onclick = () => { const i = $("#aPw"); i.type = i.type==="password" ? "text" : "password"; eye.textContent = i.type==="password" ? "보기" : "숨김"; };
   $("#authForm").onsubmit = async ev => {
     ev.preventDefault(); const btn = $("#aBtn"); btn.disabled = true; $("#aErr").textContent = "";
+    const waitT = setTimeout(() => { const w = $("#aWait"); if(w) w.textContent = "확인 중입니다…"; }, 1500);
+    const slowT = setTimeout(() => { const w = $("#aWait"); if(w) w.innerHTML = "응답이 오래 걸리고 있습니다. 인터넷 연결을 확인하시고, 계속 멈춰 있으면 <b>이 탭을 닫고 새 탭으로</b> 다시 열어 주세요."; }, 10000);
     try {
       if(m==="reset"){ await requestReset($("#aName").value, $("#aPhone").value); openModal(`<h3>요청이 접수되었습니다</h3><p>담당자가 확인하면 비밀번호가 임시 비밀번호 <b>${TEMP_PW}</b>으로 초기화됩니다.<br>잠시 후 로그인 화면에서 핸드폰번호와 <b>${TEMP_PW}</b>으로 로그인해 주세요.</p><p class="hint">급하시면 ${esc(S.phone)} 로 연락 주세요.</p><div class="btns"><button id="mOk">확인</button></div>`); $("#mOk").onclick = () => { closeModal(); authMode = "login"; render(); }; return; }
       if(m==="signup"){ remember($("#aName").value.trim(), digits($("#aPhone").value)); }
@@ -583,6 +600,7 @@ function renderAuth(app){
       else if(m==="admin") await doAdminLogin($("#aId").value, $("#aPw").value);
       else await doLogin($("#aPhone").value, $("#aPw").value);
     } catch(e){ $("#aErr").textContent = typeof e === "string" ? e : authMsg(e); btn.disabled = false; }
+    finally { clearTimeout(waitT); clearTimeout(slowT); const w = $("#aWait"); if(w) w.textContent = ""; }
   };
 }
 
@@ -673,7 +691,7 @@ function renderOrderTab(body){
   const closed = orderClosed();
   body.innerHTML = `
     <div class="notice"><b>꽃밥에피다 2026 추석 명절음식 안내</b>\n${esc(S.notice)}</div>
-    ${closed ? `<div class="emph">예약 접수가 마감되었습니다. 문의: ${esc(S.phone)}</div>` : `<div class="emph">${esc(S.limitNote)}</div>`}
+    ${closed ? `<div style="background:#b3261e;color:#fff;border-radius:14px;padding:18px 14px;margin:8px 0 12px;text-align:center;font-weight:800;font-size:26px;line-height:1.3;box-shadow:0 4px 14px rgba(179,38,30,.3);word-break:keep-all">예약 접수가 마감되었습니다<div style="font-size:14px;font-weight:600;margin-top:8px;opacity:.95">문의: ${esc(S.phone)}</div></div>` : `<div class="emph">${esc(S.limitNote)}</div>`}
     <div class="card" style="border-color:#f0cfc4;background:#fff"><h3 style="color:var(--tc-dark)">꽃밥에서 사용하는 재료들</h3><div style="white-space:pre-line;font-size:14px;line-height:1.7">${esc(S.materials||"")}</div></div>
     <div class="bigmsg">입금완료 순으로 예약이 확정됩니다</div>
     <div class="menu">${MENU.filter(m => m.active !== false).map(m => { const rem = remaining(m); const soldOut = rem !== null && rem <= 0; const urgentAt = Number(m.urgentAt) || Number(S.urgentAt) || 10; const urgent = rem !== null && rem > 0 && rem <= urgentAt; return `<div class="item ${soldOut?"soldout":""} ${urgent?"urgent":""}">
@@ -717,7 +735,7 @@ function renderCartTab(body){
       <input id="memo" value="${esc(cartForm.memo)}" placeholder="기타 요청">
       <div style="margin-top:12px"><button class="ghost" id="acctBtn" style="width:100%;border-color:var(--tc);color:var(--tc)">입금계좌 확인하기</button></div>
     </div>
-    ${closed ? `<div class="emph">예약 접수가 마감되었습니다.</div>` : ""}
+    ${closed ? `<div style="background:#b3261e;color:#fff;border-radius:14px;padding:18px 14px;margin:8px 0 12px;text-align:center;font-weight:800;font-size:26px;line-height:1.3;box-shadow:0 4px 14px rgba(179,38,30,.3);word-break:keep-all">예약 접수가 마감되었습니다<div style="font-size:14px;font-weight:600;margin-top:8px;opacity:.95">문의: ${esc(S.phone)}</div></div>` : ""}
     <button id="submitBtn" style="width:100%;padding:14px;font-size:17px" ${(!items.length||closed)?"disabled":""}>예약 신청하기 (${won(total)})</button>
     <p class="hint" style="text-align:center">예약 신청 후 입금해 주시면 확인 후 예약이 완료됩니다.</p>`;
   body.querySelectorAll(".qty button").forEach(b => b.onclick = () => { const id = b.dataset.id; cart[id] = Math.max(0,(cart[id]||0)+Number(b.dataset.d)); if(!cart[id]) delete cart[id]; saveCartLocal(); render(); });
