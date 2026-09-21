@@ -1130,12 +1130,13 @@ function excelData(){
   const sumData = [...sd.byItem, sd.totalRow].map(r => [r.name, ...r.dates, r.undated, r.total, r.paid, r.claimed, r.unpaid]);
   const timeHead = ["픽업 날짜", "시간대", "예약 건수", ...names.map(short), "총 수량"];
   const timeData = [...sd.dateTotals.map(r => [fmtPickDate(r.date), "날짜 합계", r.orders, ...r.items, r.items.reduce((a,b)=>a+b,0)]), ...sd.byTime.map(r => [r.date ? fmtPickDate(r.date) : "날짜 미정", r.time, r.orders, ...r.items, r.items.reduce((a,b)=>a+b,0)])];
-  const pickHead = ["픽업 날짜","시간대","주문자명","전화번호","예약품목","수량","합계금액","입금자명","입금여부","수령","퀵배달","요청사항"];
+  const pickHead = ["픽업 날짜","시간대","주문자명","전화번호","예약품목","수량","합계금액","입금여부","수령","요청사항"];
   // 픽업순 명단: 예약 한 건을 품목 수만큼 여러 줄로 나누고(품목 한 줄에 하나), 나머지 칸은 세로로 병합
   const pickData = []; const pickSpans = [];
-  pickupOrderedList().forEach(g => { pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, `${g.orders.length}건 / ${g.orders.reduce((s,o)=>s+(o.qtyTotal||0),0)}개`, "", "", null, null, "", "", "", "", ""]);
-    g.orders.forEach(o => { const its = (o.items||[]).length ? o.items : [{name:"", qty:""}]; const start = pickData.length;
-      its.forEach((i, k) => pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, o.name, fmtPhone(o.phone), i.name ? `${i.name} ${i.qty}` : "", o.qtyTotal||0, o.total||0, o.depositor||"", o.paid?"입금완료":(o.customerPaid?"고객 입금표시":"미입금"), o.pickedUp?"수령":"", quickText(o), o.memo||""]));
+  pickupOrderedList().forEach(g => { pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, "", "", "", null, null, "", "", `${g.orders.length}건 / ${g.orders.reduce((s,o)=>s+(o.qtyTotal||0),0)}개`]);
+    g.orders.forEach(o => { const its = (o.items||[]).length ? o.items : [{name:"", qty:null}]; const start = pickData.length;
+      const memo = [quickText(o), o.memo||""].filter(Boolean).join(" / ");
+      its.forEach(i => pickData.push([g.date ? fmtPickDate(g.date) : "날짜 미정", g.time, o.name, fmtPhone(o.phone), i.name||"", i.name ? i.qty : null, o.total||0, o.paid?"입금완료":(o.customerPaid?"고객 입금표시":"미입금"), o.pickedUp?"수령":"", memo]));
       if(its.length > 1) pickSpans.push({ start, count: its.length }); }); });
   // 입금 대조: 입금자명 가나다순 → 금액
   const active = rows.filter(r => r.status !== "cancelled");
@@ -1227,10 +1228,10 @@ function buildXlsx(d){
   d.timeData.forEach(r => { const isDate = r[1] === "날짜 합계"; rows3.push(r.map((v, ci) => ({ v, s: isDate ? (ci < 2 ? 12 : 11) : (ci < 2 ? 3 : 4) }))); });
   const widths3 = [14, 12, 10, ...Array(d.names.length).fill(11), 10];
   const rows4 = [ d.pickHead.map(v => ({v, s:2})) ];
-  d.pickData.forEach(r => { const isGroup = r[3] === "" && r[5] === null; rows4.push(r.map((v, ci) => ({ v, s: isGroup ? 12 : (ci === 5 || ci === 9 ? 4 : ci === 6 ? 6 : ci === 8 ? (v === "입금완료" ? 7 : 8) : ci === 4 || ci === 10 || ci === 11 ? 10 : 3) }))); });
-  // 품목이 여러 개인 예약: 품목(E열) 빼고 나머지 칸을 세로 병합 (머리글 1줄 → 엑셀 행 = 자료 순번 + 2)
-  const merges4 = []; d.pickSpans.forEach(sp => { const r1 = sp.start + 2, r2 = sp.start + sp.count + 1; for(let ci = 0; ci < d.pickHead.length; ci++){ if(ci === 4) continue; merges4.push(`${colName(ci+1)}${r1}:${colName(ci+1)}${r2}`); } });
-  const widths4 = [14, 12, 12, 15, 44, 7, 11, 12, 12, 7, 22, 20];
+  d.pickData.forEach(r => { const isGroup = r[2] === "" && r[6] === null; rows4.push(r.map((v, ci) => ({ v, s: isGroup ? 12 : (ci === 2 || ci === 3 || ci === 5 || ci === 8 ? 4 : ci === 6 ? 6 : ci === 7 ? (v === "입금완료" ? 7 : 8) : ci === 4 || ci === 9 ? 10 : 4) }))); });
+  // 품목이 여러 개인 예약: 품목(E열)·수량(F열) 빼고 나머지 칸을 세로 병합 (머리글 1줄 → 엑셀 행 = 자료 순번 + 2)
+  const merges4 = []; d.pickSpans.forEach(sp => { const r1 = sp.start + 2, r2 = sp.start + sp.count + 1; for(let ci = 0; ci < d.pickHead.length; ci++){ if(ci === 4 || ci === 5) continue; merges4.push(`${colName(ci+1)}${r1}:${colName(ci+1)}${r2}`); } });
+  const widths4 = [13, 11, 12, 15, 30, 7, 12, 12, 7, 36];
   const rows6 = [ d.matchHead.map(v => ({v, s:1})) ];
   d.matchData.forEach(r => rows6.push(r.map((v, ci) => ({ v, s: ci === 1 ? 6 : ci === 2 ? (v === "입금완료" ? 7 : 8) : 3 }))));
   const widths6 = [14, 12, 12, 12, 15, 18, 18, 22];
