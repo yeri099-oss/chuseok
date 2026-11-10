@@ -52,6 +52,23 @@ nav.tabs .in.wide{max-width:1200px}
 nav.tabs button{flex:1;background:none;color:var(--muted);border-radius:0;padding:12px 4px;font-weight:600;border-bottom:3px solid transparent;position:relative}
 nav.tabs button.on{color:var(--tc);border-bottom-color:var(--tc)}
 nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;background:var(--tc);color:#fff;font-size:11px;border-radius:10px;padding:0 6px;line-height:16px}
+.secbar{background:#f6f1eb;border-bottom:1px solid var(--line)}
+.secbar .in{max-width:760px;margin:0 auto;padding:8px 12px;display:flex;gap:8px}
+.secbar .in.wide{max-width:1200px}
+.secbar button{flex:1;background:#fff;color:var(--muted);border:1px solid var(--line);padding:10px 8px;font-size:16px}
+.secbar button.on{background:var(--tc);color:#fff;border-color:var(--tc)}
+.secbar .badge{display:inline-block;vertical-align:top;margin-left:6px;background:#fff;color:var(--tc);font-size:11px;border-radius:10px;padding:0 6px;line-height:16px}
+.secbar button:not(.on) .badge{background:var(--tc);color:#fff}
+.fstock{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.fstock .s{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px}
+.fstock .s b{color:var(--tc-dark);font-size:15px;margin-left:4px}
+.fstock .s.low{border-color:var(--danger)} .fstock .s.over{border-color:var(--danger);background:#fdecec}
+.qrow .lim{display:block;font-size:12px;font-weight:700;color:var(--ok)}
+.qrow .lim.over{color:var(--danger)}
+#fishArea table{min-width:0}
+#fishArea td.items{white-space:pre-line;min-width:130px;font-size:12.5px;line-height:1.35}
+#fishArea td.memo{white-space:normal;min-width:80px;max-width:180px;word-break:break-all;font-size:12px}
+#fishArea td.acts button{margin:2px 1px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
 .card h3{margin:0 0 8px;font-size:16px}
 .notice{background:var(--tc-light);border:1px solid #f0cfc4;border-radius:14px;padding:12px 14px;margin:12px 0;font-size:14px;white-space:pre-line}
@@ -361,6 +378,9 @@ let MENU = [];            // 품목
 let STOCK = {};           // holidayApp_meta/stock.reserved — 품목별 예약된 수량(취소 제외)
 let ORDERS = [];          // 내 주문 또는(관리자) 전체 주문
 let LOGS = [];
+let FISH = [];   // 생선 전화예약 (holidayApp_orders 중 kind:"fish")
+let section = (() => { try { return localStorage.getItem("chuseokSection") === "fish" ? "fish" : "chuseok"; } catch(e){ return "chuseok"; } })();   // 관리자 화면: chuseok(추석) | fish(생선예약)
+let fishQ = ""; let fishShowCancelled = false; let fishSort = { key:"createdAt", dir:-1 };
 let USERS = []; let RESETS = []; let PREPAY = []; let VISITS = {};   // holidayApp_meta/visits — 날짜별 접속 수 {YYYY-MM-DD:{u:기기수, v:접속횟수}}   // 예약 전 선입금 기록
 const quickPill = o => o && o.quick ? `<span class="pill" style="background:#fdebd3;color:#b3741f" title="${esc(o.quickAddr||'')}">퀵</span>` : "";
 const quickText = o => o && o.quick ? "퀵 배달" + (o.quickAddr ? " ("+o.quickAddr+")" : "") : "";
@@ -435,7 +455,7 @@ DB.onAuth(async u => {
       try { localStorage.setItem("chuseokAdminDevice", "1"); } catch(e){}
       if(!isStaff) ensureAdminSeed().catch(e => console.warn(e));   // 화면을 막지 않도록 백그라운드로
       let firstOrders = true;
-      unsubs.push(DB.listen(C.orders, null, d => { ORDERS = d; if(tab==="list" && document.activeElement && document.activeElement.id==="q") renderListTable(); else render(); if(firstOrders && !isStaff){ firstOrders = false; setTimeout(recomputeStock, 800); } }, e => toast(authMsg(e))));
+      unsubs.push(DB.listen(C.orders, null, d => { ORDERS = d.filter(o => o.kind !== "fish"); FISH = d.filter(o => o.kind === "fish"); const ae = document.activeElement && document.activeElement.id; if(section==="fish" && ae==="fq") renderFishTable(); else if(section!=="fish" && tab==="list" && ae==="q") renderListTable(); else render(); if(firstOrders && !isStaff){ firstOrders = false; setTimeout(recomputeStock, 800); } }, e => toast(authMsg(e))));
       unsubs.push(DB.listen(C.users, null, d => { USERS = d; if(tab==="settings") render(); }));
       if(!isStaff) unsubs.push(DB.listen(C.prepay, null, d => { PREPAY = d; if(tab==="list"){ if(document.activeElement && document.activeElement.id==="q") renderListTable(); else render(); } }));
       if(!isStaff){
@@ -458,7 +478,7 @@ DB.onAuth(async u => {
       loadCartLocal();
       if(!cartForm.depositor) cartForm.depositor = profile.name || "";
       let firstMine = true;
-      unsubs.push(DB.listen(C.orders, {field:"uid",op:"==",value:u.uid}, d => { ORDERS = d; render(); if(firstMine){ firstMine = false; if(pendingSubmit){ pendingSubmit = false; tab = "cart"; render(); submitOrder(); } } }, e => toast(authMsg(e))));
+      unsubs.push(DB.listen(C.orders, {field:"uid",op:"==",value:u.uid}, d => { ORDERS = d.filter(o => o.kind !== "fish"); render(); if(firstMine){ firstMine = false; if(pendingSubmit){ pendingSubmit = false; tab = "cart"; render(); submitOrder(); } } }, e => toast(authMsg(e))));
       tab = pendingSubmit ? "cart" : "order";
     }
     unsubs.push(DB.listen(C.menu, null, d => { MENU = d.sort((a,b)=>(a.sort||0)-(b.sort||0)); render(); }, e => toast(authMsg(e))));
@@ -607,7 +627,7 @@ function renderAuth(app){
 /* ---------- 고객 화면 ---------- */
 function header(wide){
   return `<header class="top"><div class="in ${wide?"wide":""}">
-    <div class="brand"><img src="${LOGO}" alt="" style="width:36px;height:36px;border-radius:8px"><div>꽃밥에피다<small>2026 추석 명절음식 예약${isStaff?" · 전화예약 입력":isAdmin?" · 관리자":""}</small></div></div>
+    <div class="brand"><img src="${LOGO}" alt="" style="width:36px;height:36px;border-radius:8px"><div>꽃밥에피다<small>${isAdmin && section==="fish" ? "생선 예약" : "2026 추석 명절음식 예약"}${isStaff?" · 전화예약 입력":isAdmin?" · 관리자":""}</small></div></div>
     <div class="spacer"></div>
     ${user ? `<div class="who"><b>${esc(profile.name||"")}</b>${profile.phone?"<br>"+esc(fmtPhone(profile.phone)):""}</div>
     ${isAdmin ? "" : `<button class="ghost sm" id="pwBtn">비밀번호 변경</button>`}
@@ -911,10 +931,15 @@ function renderAdmin(app){
   const pendingResets = RESETS.filter(r => r.status === "requested").length;
   const tabs = isStaff ? [["list","예약자 명단"],["summary","집계"]] : [["list","예약자 명단"],["summary","집계 · 매출"],["menu","품목 관리"],["settings","설정" + (pendingResets ? ` (${pendingResets})` : "")],["log","기록"]];
   if(isStaff && !["list","summary"].includes(tab)) tab = "list";
-  app.innerHTML = `<div class="topwrap">` + header(true) + `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav></div><div class="wrap wide" id="body"></div>`;
+  const fish = section === "fish";
+  const fishOpen = FISH.filter(o => o.status !== "cancelled" && !o.pickedUp).length;
+  const secBar = `<div class="secbar"><div class="in wide"><button class="${fish?"":"on"}" data-sec="chuseok">추석 명절음식</button><button class="${fish?"on":""}" data-sec="fish">생선예약${fishOpen ? `<span class="badge">${fishOpen}</span>` : ""}</button></div></div>`;
+  app.innerHTML = `<div class="topwrap">` + header(true) + secBar + (fish ? "" : `<nav class="tabs"><div class="in wide">${tabs.map(([k,l]) => `<button class="${tab===k?"on":""}" data-t="${k}">${l}</button>`).join("")}</div></nav>`) + `</div><div class="wrap wide" id="body"></div>`;
   bindHeader();
+  app.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => { section = b.dataset.sec; try { localStorage.setItem("chuseokSection", section); } catch(e){} render(); window.scrollTo(0,0); });
   app.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
   const body = $("#body");
+  if(fish) return renderFishList(body);
   ({list:renderAdminList, summary:renderAdminSummary, menu:renderAdminMenu, settings:renderAdminSettings, log:renderAdminLog}[tab]||renderAdminList)(body);
 }
 
@@ -1468,11 +1493,177 @@ function orderFormModal(o, pre){
     } catch(e){ $("#fErr").textContent = authMsg(e); }
   };
 }
+/* ---------- 생선예약 (전화예약 전용) ---------- */
+// 품목·가격·한정 수량은 여기서 고칩니다. limit: 한정 수량(주문 단위 기준, 없으면 0)
+const FISH_MENU = [
+  { id:"f1", name:"한치", spec:"생물·횟감·대 / 1kg (약 2~3마리)", unit:"kg", price:48000, limit:3, note:"오늘특가 3마리 한정" },
+  { id:"f2", name:"장어", spec:"아나고·손질 / 2미 (약 350g)", unit:"개", price:9000, limit:0, note:"" },
+  { id:"f3", name:"달고기", spec:"달돔·순살·급냉 / 500g (1팩)", unit:"팩", price:19500, limit:0, note:"" },
+  { id:"f4", name:"반건조 참조기", spec:"1팩 (5~8미, 크기에 따라 수량 다름)", unit:"팩", price:6500, limit:0, note:"" },
+  { id:"f5", name:"반건조 옥돔", spec:"1팩 (3미)", unit:"팩", price:6500, limit:10, note:"10팩 한정 특가" },
+  { id:"f6", name:"풀치 순살", spec:"작은 갈치 / 250g (1팩)", unit:"팩", price:7800, limit:0, note:"한시적 특가" }
+];
+// 품목별 예약 수량(취소 제외). exceptId: 수정 중인 예약은 빼고 계산
+const fishReserved = exceptId => { const r = {}; FISH.filter(o => o.status !== "cancelled" && o.id !== exceptId).forEach(o => (o.items||[]).forEach(i => { r[i.id] = (r[i.id]||0) + (Number(i.qty)||0); })); return r; };
+const fishWhen = o => { const d = o.date ? fmtPickDate(o.date) : "날짜 미정"; return o.delivery === "parcel" ? `택배 · ${d} 발송` : `픽업 · ${d}${o.time ? " " + o.time : ""}`; };
+function fishRows(){
+  let rows = FISH.map(o => ({ ...o, itemsText:(o.items||[]).map(i => `${i.name} ×${i.qty}`).join("\n"), createdMs: toDate(o.createdAt) ? toDate(o.createdAt).getTime() : 0, phoneText: fmtPhone(o.phone) }));
+  if(!fishShowCancelled) rows = rows.filter(r => r.status !== "cancelled");
+  const q = fishQ.trim().toLowerCase();
+  if(q) rows = rows.filter(r => [r.name, r.phone, r.phoneText, r.itemsText, r.total, fishWhen(r), r.date, r.address, r.memo, r.paid ? "입금완료" : "미입금", r.pickedUp ? "수령완료" : "미수령", r.status === "cancelled" ? "취소" : "", fmtDT(r.createdAt)].join(" ").toLowerCase().includes(q));
+  const k = fishSort.key, d = fishSort.dir;
+  rows.sort((a,b) => { let x, y;
+    if(k === "date"){ x = (a.date||"9") + (a.time||""); y = (b.date||"9") + (b.time||""); }
+    else if(k === "paid"){ x = a.paid ? 1 : 0; y = b.paid ? 1 : 0; }
+    else if(k === "pickedUp"){ x = a.pickedUp ? 1 : 0; y = b.pickedUp ? 1 : 0; }
+    else if(k === "createdAt"){ x = a.createdMs; y = b.createdMs; }
+    else { x = a[k]; y = b[k]; }
+    if(typeof x === "number" || typeof y === "number") return ((x||0) - (y||0)) * d;
+    return String(x||"").localeCompare(String(y||""), "ko") * d; });
+  return rows;
+}
+function renderFishList(body){
+  const res = fishReserved();
+  const active = FISH.filter(o => o.status !== "cancelled");
+  const sumTotal = active.reduce((s,o) => s + (Number(o.total)||0), 0);
+  const paidTotal = active.filter(o => o.paid).reduce((s,o) => s + (Number(o.total)||0), 0);
+  body.innerHTML = `
+    <div class="row" style="margin:12px 0;gap:10px;flex-wrap:wrap"><button id="fishAdd" style="padding:14px 22px;font-size:17px">+ 생선 전화예약 바로 입력</button><span class="hint">전화로 받은 생선 예약을 바로 입력하세요. 주문자명만 있어도 저장되고, 나머지는 '수정'으로 채울 수 있습니다.</span></div>
+    <div class="fstock">${FISH_MENU.map(m => { const n = res[m.id]||0; const lim = Number(m.limit)||0; const left = lim - n; return `<div class="s ${lim && left < 0 ? "over" : lim && left <= 2 ? "low" : ""}">${esc(m.name)} 예약<b>${n}</b>${lim ? ` <span class="hint">/ 한정 ${lim} · </span><b style="color:${left < 0 ? "var(--danger)" : "var(--ok)"}">${left < 0 ? `${-left} 초과` : `남음 ${left}`}</b>` : ""}</div>`; }).join("")}</div>
+    <div class="stats"><div class="stat">예약<b>${active.length}건</b></div><div class="stat">합계<b>${won(sumTotal)}</b></div><div class="stat">입금확인<b>${won(paidTotal)}</b></div><div class="stat">미수령<b>${active.filter(o => !o.pickedUp).length}건</b></div></div>
+    <div class="toolbar"><input id="fq" placeholder="검색 (이름·번호·품목·날짜)" value="${esc(fishQ)}"><label class="row" style="font-size:13px;gap:4px"><input type="checkbox" id="fShowCancel" style="width:18px" ${fishShowCancelled ? "checked" : ""}>취소 포함</label><div class="spacer"></div><span class="hint" id="fRowCount"></span></div>
+    <div id="fishArea"></div>
+    <p class="hint">제목을 누르면 정렬(다시 누르면 역순)됩니다. 생선 예약은 추석 명단·집계·엑셀과 고객 화면에는 나오지 않습니다.</p>`;
+  renderFishTable();
+  $("#fishAdd").onclick = () => fishFormModal(null);
+  const q = $("#fq"); q.oninput = () => { fishQ = q.value; renderFishTable(); };
+  $("#fShowCancel").onchange = e => { fishShowCancelled = e.target.checked; renderFishTable(); };
+}
+function renderFishTable(){
+  const area = $("#fishArea"); if(!area) return;
+  const rows = fishRows();
+  const rc = $("#fRowCount"); if(rc) rc.textContent = rows.length + "건";
+  const cols = [["name","주문자 / 전화"],["itemsText","예약품목"],["total","합계"],["date","수령"],["paid","입금"],["pickedUp","수령완료"],["memo","요청사항"],["createdAt","접수"]];
+  area.innerHTML = `<div class="tblwrap"><table><thead><tr>${cols.map(([k,l]) => `<th data-fk="${k}">${l}${fishSort.key===k ? `<span class="arr">${fishSort.dir>0 ? "▲" : "▼"}</span>` : ""}</th>`).join("")}<th></th></tr></thead><tbody>
+    ${rows.map(r => `<tr class="${r.status==="cancelled" ? "cancelled" : ""} ${r.paid ? "paid" : ""} ${r.pickedUp ? "picked" : ""}">
+      <td><b>${esc(r.name)}</b>${r.status==="cancelled" ? ` <span class="pill cancel">취소</span>` : ""}<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(r.phoneText)}</div></td>
+      <td class="items">${esc(r.itemsText)}</td>
+      <td style="text-align:right"><b>${won(r.total)}</b></td>
+      <td>${r.delivery==="parcel" ? `<span class="pill" style="background:#e8f0fb;color:#2b5aa6">택배</span>` : `<span class="pill" style="background:#f1ebe4;color:#7a716a">픽업</span>`}<div style="font-size:12.5px;margin-top:2px">${esc(r.date ? fmtPickDate(r.date) : "날짜 미정")}${r.delivery!=="parcel" && r.time ? " " + esc(r.time) : ""}</div>${r.delivery==="parcel" ? `<div class="hint" style="font-size:11.5px;white-space:normal;max-width:180px">${esc(r.address||"(주소 없음)")}</div>` : ""}</td>
+      <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-fpaid="${r.id}" ${r.paid ? "checked" : ""}>${r.paid ? `<span class="pill ok">완료</span>` : `<span class="pill wait">대기</span>`}</label>`}</td>
+      <td class="nol">${r.status==="cancelled" ? "-" : `<label class="row" style="gap:6px"><input type="checkbox" class="chk" data-fpick="${r.id}" ${r.pickedUp ? "checked" : ""}>${r.pickedUp ? `<span class="pill ok">${r.delivery==="parcel" ? "발송" : "수령"}</span>` : `<span class="hint">미${r.delivery==="parcel" ? "발송" : "수령"}</span>`}</label>`}</td>
+      <td class="memo">${esc(r.memo||"")}${r.cancelReason ? `<div class="hint" style="text-decoration:none">취소: ${esc(r.cancelReason)}</div>` : ""}</td>
+      <td class="hint" style="font-size:12px">${esc(fmtDT(r.createdAt))}</td>
+      <td class="nol acts"><button class="ghost sm" data-fedit="${r.id}">수정</button>${r.status==="cancelled" ? `<button class="ghost sm" data-frestore="${r.id}">복구</button>` : `<button class="ghost sm" data-fcancel="${r.id}">취소</button>`}${isStaff ? "" : `<button class="ghost sm" data-fdel="${r.id}" style="color:var(--danger)">삭제</button>`}</td></tr>`).join("")}
+    ${rows.length===0 ? `<tr><td colspan="${cols.length+1}" class="hint" style="text-align:center;padding:30px">생선 예약이 없습니다.</td></tr>` : ""}</tbody></table></div>`;
+  const find = id => FISH.find(x => x.id === id);
+  const who = o => `${o.name}${o.phone ? "(" + fmtPhone(o.phone) + ")" : ""}`;
+  area.querySelectorAll("th[data-fk]").forEach(th => th.onclick = () => { const k = th.dataset.fk; if(fishSort.key === k) fishSort.dir *= -1; else fishSort = { key:k, dir:1 }; renderFishTable(); });
+  area.querySelectorAll("[data-fedit]").forEach(b => b.onclick = () => { const o = find(b.dataset.fedit); if(o) fishFormModal(o); });
+  area.querySelectorAll("[data-fpaid]").forEach(c => c.onchange = async () => {
+    const o = find(c.dataset.fpaid); if(!o) return; const on = c.checked;
+    try { await DB.update(C.orders, o.id, { paid:on, paidAt: on ? DB.ts() : null, updatedAt:DB.ts() }); await log(on ? "fish_paid_on" : "fish_paid_off", `${who(o)} ${won(o.total)} 입금확인 ${on ? "체크" : "해제"} (${o.id})`); toast(on ? `${o.name}님 입금확인` : "입금확인 해제"); } catch(e){ toast(authMsg(e)); renderFishTable(); }
+  });
+  area.querySelectorAll("[data-fpick]").forEach(c => c.onchange = async () => {
+    const o = find(c.dataset.fpick); if(!o) return; const on = c.checked;
+    try { await DB.update(C.orders, o.id, { pickedUp:on, pickedUpAt: on ? DB.ts() : null, updatedAt:DB.ts() }); await log(on ? "fish_picked" : "fish_picked_off", `${who(o)} ${o.delivery==="parcel" ? "발송" : "수령"} ${on ? "체크" : "해제"} (${o.id})`); toast(on ? `${o.name}님 ${o.delivery==="parcel" ? "발송" : "수령"} 완료` : "해제되었습니다"); } catch(e){ toast(authMsg(e)); renderFishTable(); }
+  });
+  area.querySelectorAll("[data-fcancel]").forEach(b => b.onclick = async () => {
+    const o = find(b.dataset.fcancel); if(!o) return;
+    const reason = await new Promise(res => {
+      openModal(`<h3>생선 예약 취소</h3><p><b>${esc(o.name)}</b>님의 예약(${won(o.total)})을 취소 처리합니다.</p>
+        <label class="f">취소 사유 <span style="font-weight:400">(선택)</span></label>
+        <div class="chips" style="margin-bottom:6px">${["고객 요청","재고 소진","중복 입력"].map(t => `<button type="button" class="chip" data-rs="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+        <input id="cReason" placeholder="예: 고객 요청">
+        <p class="hint">명단에는 '취소'로 남고(취소 포함 체크 시 표시), 복구할 수 있습니다.</p>
+        <div class="btns"><button class="ghost" id="mCancel">돌아가기</button><button class="danger" id="mOk">취소 처리</button></div>`);
+      document.querySelectorAll("[data-rs]").forEach(x => x.onclick = () => { $("#cReason").value = x.dataset.rs; });
+      $("#mCancel").onclick = () => { closeModal(); res(null); };
+      $("#mOk").onclick = () => { const v = $("#cReason").value.trim(); closeModal(); res({ v }); };
+    });
+    if(!reason) return;
+    try { await DB.update(C.orders, o.id, { status:"cancelled", cancelReason:reason.v || "", cancelledAt:DB.ts(), updatedAt:DB.ts() }); await log("fish_cancel", `${who(o)} ${won(o.total)} 취소${reason.v ? " 사유: " + reason.v : ""} (${o.id})`); toast("취소 처리되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
+  area.querySelectorAll("[data-frestore]").forEach(b => b.onclick = async () => {
+    const o = find(b.dataset.frestore); if(!o) return;
+    if(!(await confirmModal("예약 복구", `<b>${esc(o.name)}</b>님의 취소된 생선 예약을 다시 살리시겠습니까?`, "복구"))) return;
+    try { await DB.update(C.orders, o.id, { status:"active", cancelReason:null, updatedAt:DB.ts() }); await log("fish_restore", `${who(o)} ${won(o.total)} 복구 (${o.id})`); toast("복구되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
+  area.querySelectorAll("[data-fdel]").forEach(b => b.onclick = async () => {
+    const o = find(b.dataset.fdel); if(!o) return;
+    if(!(await confirmModal("예약 삭제", `<b>${esc(o.name)}</b>님의 생선 예약을 삭제하시겠습니까?<br><span class="hint">삭제하면 되돌릴 수 없습니다. 기록을 남기려면 '취소'를 눌러 주세요.</span>`, "삭제", true))) return;
+    try { await DB.del(C.orders, o.id); await log("fish_delete", `${who(o)} ${won(o.total)} 삭제 (${o.id})`); toast("삭제되었습니다"); } catch(e){ toast(authMsg(e)); }
+  });
+}
+function fishFormModal(o){
+  const isNew = !o;
+  const qty = {}; (o && o.items || []).forEach(i => qty[i.id] = i.qty);
+  const res = fishReserved(o ? o.id : null);
+  const delivery0 = o && o.delivery === "parcel" ? "parcel" : "pickup";
+  openModal(`<h3>${isNew ? "생선 전화예약 입력" : "생선 예약 수정"}</h3>
+    <p class="hint" style="margin:0 0 4px">주문자명만 있으면 저장할 수 있고, 나머지는 나중에 '수정'으로 채워도 됩니다.</p>
+    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">주문자명 <span style="color:var(--tc)">*</span></label><input id="fName" value="${esc(o ? o.name : "")}" placeholder="이름"></div><div style="flex:1;min-width:200px"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o ? fmtPhone(o.phone) : "")}" placeholder="010-1234-5678"></div></div>
+    <label class="f">예약 품목과 수량</label>
+    <div class="qgrid">${FISH_MENU.map(m => `<div class="qrow ${qty[m.id] ? "on" : ""}"><div class="n">${esc(m.name)} <span style="color:var(--tc)">${won(m.price)}</span><small>${esc(m.spec)}${m.note ? ` · <b style="color:var(--tc-dark)">${esc(m.note)}</b>` : ""}</small>${Number(m.limit) ? `<span class="lim" data-lim="${m.id}"></span>` : ""}</div><div class="qty"><button type="button" data-qd="-1" data-for="${m.id}">−</button><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}"><button type="button" data-qd="1" data-for="${m.id}">+</button></div></div>`).join("")}</div>
+    <div class="row between" style="margin-top:10px;padding:10px 12px;background:#f6f1eb;border-radius:12px"><span style="font-size:16px">합계</span><b id="fTotal" style="color:var(--tc);font-size:24px">${won(o ? o.total : 0)}</b></div>
+    <label class="f">받는 방법</label>
+    <div class="seg" id="fDel"><button type="button" data-dv="pickup" class="${delivery0==="pickup" ? "on" : ""}">매장 픽업</button><button type="button" data-dv="parcel" class="${delivery0==="parcel" ? "on" : ""}">택배</button></div>
+    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f" id="fDateL">${delivery0==="parcel" ? "발송 희망일" : "픽업 날짜"}</label><input id="fDate" type="date" value="${esc(o ? o.date||"" : "")}"></div>
+      <div style="flex:1;min-width:200px" id="fTimeBox" ${delivery0==="parcel" ? "hidden" : ""}><label class="f">픽업 시간</label><input id="fTime" value="${esc(o ? o.time||"" : "")}" placeholder="예: 오후 3시"></div></div>
+    <div id="fAddrBox" ${delivery0==="parcel" ? "" : "hidden"}><label class="f">받는 주소</label><input id="fAddr" value="${esc(o ? o.address||"" : "")}" placeholder="택배 받으실 주소"></div>
+    <div style="margin-top:8px"><label class="f">요청사항</label><textarea id="fMemo" rows="3" placeholder="손질 요청, 통화 내용 등 자유롭게 적어 주세요">${esc(o ? o.memo||"" : "")}</textarea></div>
+    <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o && o.paid ? "checked" : ""}>입금 확인됨</label>
+    <div class="err" id="fErr"></div>
+    <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "예약 저장" : "저장"}</button></div>`);
+  document.querySelector("#modalRoot .modal").classList.add("wide");
+  let delivery = delivery0; let overOk = false;
+  const read = () => { const items = []; document.querySelectorAll("[data-q]").forEach(i => { const q = Math.max(0, Math.floor(Number(i.value)||0)); if(q > 0){ const m = FISH_MENU.find(x => x.id === i.dataset.q); items.push({ id:m.id, name:m.name, price:m.price, unit:m.unit, qty:q }); } }); return items; };
+  const over = () => read().filter(i => { const m = FISH_MENU.find(x => x.id === i.id); return Number(m.limit) && (res[i.id]||0) + i.qty > Number(m.limit); });
+  const calc = () => {
+    let t = 0;
+    document.querySelectorAll("[data-q]").forEach(i => { const m = FISH_MENU.find(x => x.id === i.dataset.q); const q = Number(i.value)||0; t += q * m.price; i.closest(".qrow").classList.toggle("on", q > 0);
+      const l = document.querySelector(`[data-lim="${m.id}"]`); if(l){ const left = Number(m.limit) - (res[m.id]||0) - q; l.className = "lim" + (left < 0 ? " over" : ""); l.textContent = left < 0 ? `한정 ${m.limit} · ${-left}개 초과!` : `한정 ${m.limit} · 남은 수량 ${left}`; } });
+    $("#fTotal").textContent = won(t); overOk = false; $("#fErr").textContent = "";
+  };
+  calc();
+  setTimeout(() => { const n = $("#fName"); if(n && !n.value) n.focus(); }, 50);
+  document.querySelectorAll("[data-q]").forEach(i => i.oninput = calc);
+  document.querySelectorAll("[data-qd]").forEach(b => b.onclick = () => { const i = document.querySelector(`[data-q="${b.dataset.for}"]`); i.value = Math.max(0, (Number(i.value)||0) + Number(b.dataset.qd)); calc(); });
+  document.querySelectorAll("[data-dv]").forEach(b => b.onclick = () => { delivery = b.dataset.dv; document.querySelectorAll("[data-dv]").forEach(x => x.classList.toggle("on", x === b)); $("#fTimeBox").hidden = delivery === "parcel"; $("#fAddrBox").hidden = delivery !== "parcel"; $("#fDateL").textContent = delivery === "parcel" ? "발송 희망일" : "픽업 날짜"; if(delivery === "parcel") $("#fAddr").focus(); });
+  $("#mCancel").onclick = closeModal;
+  $("#mOk").onclick = async () => {
+    const name = $("#fName").value.trim(); const phone = digits($("#fPhone").value);
+    const err = !name ? "주문자명을 입력해 주세요." : (phone && !/^0\d{8,10}$/.test(phone)) ? "전화번호가 이상합니다. 모르면 비워두세요." : "";
+    if(err){ $("#fErr").textContent = err; return; }
+    const items = read();
+    const ov = over();
+    if(ov.length && !overOk){ overOk = true; $("#fErr").textContent = `한정 수량을 넘는 품목이 있습니다 (${ov.map(i => i.name).join(", ")}). 그래도 저장하려면 '${isNew ? "예약 저장" : "저장"}'을 한 번 더 누르세요.`; return; }
+    const paid = $("#fPaid").checked;
+    const data = { kind:"fish", name, phone, items, total: items.reduce((s,i) => s + i.price*i.qty, 0), qtyTotal: items.reduce((s,i) => s + i.qty, 0), delivery, date:$("#fDate").value, time: delivery === "parcel" ? "" : $("#fTime").value.trim(), address: delivery === "parcel" ? $("#fAddr").value.trim() : "", memo:$("#fMemo").value.trim(), paid, updatedAt:DB.ts() };
+    const btn = $("#mOk"); btn.disabled = true;
+    const desc = `${name}${phone ? "(" + fmtPhone(phone) + ")" : ""} ${won(data.total)} / ${items.map(i => i.name + "×" + i.qty).join(", ") || "품목 없음"} / ${fishWhen(data)}${data.address ? " " + data.address : ""}${paid ? " / 입금확인" : ""}`;
+    try {
+      if(isNew){
+        Object.assign(data, { uid:"fish:" + (phone || Date.now()), source:"phone", status:"active", createdAt:DB.ts(), paidAt: paid ? DB.ts() : null, createdBy: isStaff ? "staff" : "admin" });
+        const id = await DB.add(C.orders, data);
+        await log("fish_order", `생선 전화예약 ${desc} (${id})`);
+        toast("생선 예약이 저장되었습니다");
+      } else {
+        if(paid && !o.paid) data.paidAt = DB.ts(); if(!paid) data.paidAt = null;
+        await DB.update(C.orders, o.id, data);
+        await log("fish_edit", `생선 예약 수정 ${desc} (${o.id})`);
+        toast("저장되었습니다");
+      }
+      closeModal();
+    } catch(e){ btn.disabled = false; $("#fErr").textContent = authMsg(e); }
+  };
+}
+
 async function adminCreateCustomer(phone, name, silent){
   const p = digits(phone); name = (name||"").trim();
   if(!/^01\d{8,9}$/.test(p)) { toast("핸드폰번호가 있어야 계정을 만들 수 있습니다"); return null; }
   const existing = USERS.find(u => u.phone === p && !u.replacedBy);
-  if(existing){ const orders = await DB.getAll(C.orders, {field:"phone",op:"==",value:p}); let n = 0; for(const o of orders) if(o.uid !== existing.id){ await DB.update(C.orders, o.id, { uid: existing.id }); n++; } if(!silent) toast(n ? `이미 가입된 번호입니다. 예약 ${n}건을 그 계정에 연결했습니다` : "이미 가입된 번호입니다 (예약도 이미 연결됨)"); return existing.id; }
+  if(existing){ const orders = (await DB.getAll(C.orders, {field:"phone",op:"==",value:p})).filter(o => o.kind !== "fish"); let n = 0; for(const o of orders) if(o.uid !== existing.id){ await DB.update(C.orders, o.id, { uid: existing.id }); n++; } if(!silent) toast(n ? `이미 가입된 번호입니다. 예약 ${n}건을 그 계정에 연결했습니다` : "이미 가입된 번호입니다 (예약도 이미 연결됨)"); return existing.id; }
   if(!silent && !(await confirmModal("고객 계정 만들기", `<b>${esc(name)}</b> (${esc(fmtPhone(p))}) 님의 계정을 임시 비밀번호 <b>${TEMP_PW}</b>으로 만들고, 이 번호의 예약을 모두 연결합니다.<br><span class="hint">고객에게 "링크 접속 → 핸드폰번호 + ${TEMP_PW}으로 로그인"이라고 알려 주세요. 로그인하면 비밀번호를 바꾸라는 안내가 뜹니다.</span>`, "만들기"))) return null;
   try {
     const info = await loginInfo(p);
@@ -1481,7 +1672,7 @@ async function adminCreateCustomer(phone, name, silent){
     catch(e){ if((e.code||"").includes("email-already-in-use")){ v += 1; uid = await DB.adminCreateUser(phoneToEmail(p, v), TEMP_PW, name); } else throw e; }
     await DB.set(C.users, uid, { name, phone:p, createdAt:DB.ts(), lastLoginAt:null, tempPassword:true, createdBy:"admin" });
     await DB.set(C.login, p, { v, createdByAdminAt:DB.ts() }, true);
-    const orders = await DB.getAll(C.orders, {field:"phone",op:"==",value:p});
+    const orders = (await DB.getAll(C.orders, {field:"phone",op:"==",value:p})).filter(o => o.kind !== "fish");
     for(const o of orders) await DB.update(C.orders, o.id, { uid });
     await log("account_create", `${name}(${fmtPhone(p)}) 고객 계정 생성(임시 비밀번호), 예약 ${orders.length}건 연결`);
     toast(`${name}님 계정을 만들었습니다 (비밀번호 ${TEMP_PW})`);
@@ -1524,7 +1715,7 @@ async function adminResetPassword(phone, name){
     await DB.set(C.users, newUid, prof);
     for(const u of old) await DB.update(C.users, u.id, { replacedBy:newUid });
     // 같은 번호의 기존 예약을 새 계정으로 연결
-    const orders = await DB.getAll(C.orders, {field:"phone",op:"==",value:p});
+    const orders = (await DB.getAll(C.orders, {field:"phone",op:"==",value:p})).filter(o => o.kind !== "fish");
     for(const o of orders) await DB.update(C.orders, o.id, { uid:newUid });
     await DB.set(C.login, p, { v, resetAt:DB.ts() }, true);
     const req = RESETS.find(r => r.phone === p);
@@ -1534,7 +1725,7 @@ async function adminResetPassword(phone, name){
     render();
   } catch(e){ toast(authMsg(e)); }
 }
-const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", user_delete:"회원삭제", customer_paid:"고객입금표시", customer_paid_off:"입금표시해제", order_merge:"추가합산", picked_up:"수령", picked_up_off:"수령해제", prepay_add:"선입금기록", prepay_del:"선입금삭제", prepay_convert:"선입금전환", staff_login:"전화예약계정", staff_create:"계정생성", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀" };
+const LOG_LABEL = { signup:"회원가입", pw_reset:"비번초기화", pw_change:"비번변경", order_phone:"전화예약", order_edit:"예약수정", account_create:"계정생성", pickup_change:"픽업변경", user_delete:"회원삭제", customer_paid:"고객입금표시", customer_paid_off:"입금표시해제", order_merge:"추가합산", picked_up:"수령", picked_up_off:"수령해제", prepay_add:"선입금기록", prepay_del:"선입금삭제", prepay_convert:"선입금전환", staff_login:"전화예약계정", staff_create:"계정생성", order_restore:"예약복구", login:"로그인", admin_login:"관리자", order_create:"예약신청", order_cancel:"예약취소", order_delete:"예약삭제", paid_on:"입금확인", paid_off:"확인해제", menu_save:"품목저장", menu_delete:"품목삭제", settings_save:"설정저장", export:"엑셀", fish_order:"생선예약", fish_edit:"생선수정", fish_cancel:"생선취소", fish_restore:"생선복구", fish_delete:"생선삭제", fish_paid_on:"생선입금", fish_paid_off:"생선입금해제", fish_picked:"생선수령", fish_picked_off:"생선수령해제" };
 function renderAdminLog(body){
   const q = logQ.trim().toLowerCase();
   let list = [...LOGS].sort((a,b) => (toDate(b.at)||0) - (toDate(a.at)||0));
