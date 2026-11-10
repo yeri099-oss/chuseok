@@ -135,7 +135,7 @@ nav.tabs button .badge{display:inline-block;vertical-align:top;margin-left:4px;b
 .pill.ok{background:var(--ok-light);color:var(--ok)}
 .pill.wait{background:var(--warn-light);color:#7a4e0c}
 .pill.cancel{background:#eee;color:#777}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-bg{overscroll-behavior:contain;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
 .modal{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:420px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:90vh;overflow:auto}
 .modal h3{margin:0 0 10px;font-size:18px;color:var(--tc-dark)}
 .modal.wide{max-width:860px;padding:24px}
@@ -373,6 +373,12 @@ button.fx-badge:hover{filter:brightness(.95)}
 .fx-mini-btn{background:#fff;color:#5c544e;border:1px solid #e8e0d8;border-radius:10px;padding:5px 12px;font-size:13px;font-weight:600}
 .fx-mini-btn.del{color:var(--danger)}
 body.fxmode .toast{bottom:112px}
+.modal.fx-modal{max-width:1120px;background:#f6f2ec;padding:20px;overscroll-behavior:contain;border-radius:26px}
+.fx-mhead{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+.fx-mhead h3{margin:0;font-size:24px;font-weight:900;letter-spacing:-.6px;color:#2b2622}
+.fx-mhead h3 span{font-size:16px;color:#8a817a;font-weight:700;margin-left:4px}
+.fx-mhead .fx-pill{margin-left:auto}
+.fx-modal .fx-panel{position:static}
 body.fxmode,body.fxmode button,body.fxmode input,body.fxmode select,body.fxmode textarea{font-family:"Outfit","SUIT Variable","SUIT","Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo",sans-serif;letter-spacing:-.1px}
 body.fxmode .fx-i{font-family:Georgia,serif}
 </style>
@@ -410,7 +416,7 @@ const FIREBASE_CONFIG = {
   appId: "1:830387988854:web:85d1c46b3f4f374214b257"
 };
 const LOGO = "data:image/png;base64,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";
-const APP_VERSION = "v020";   // 배포 확인용 버전 (로그인 화면 아래·관리자 상단에 표시)
+const APP_VERSION = "v021";   // 배포 확인용 버전 (로그인 화면 아래·관리자 상단에 표시)
 const APP_NAME = "chuseokOrder";              // 다른 앱 탭과 로그인 저장소 분리
 const EMAIL_DOMAIN = "chuseok.goodbab.app";   // 전화번호 → 로그인용 이메일 변환
 const ADMIN_ID = "goodbab";
@@ -528,13 +534,20 @@ const authMsg = e => { const c = (e && e.code) || ""; if(c.includes("email-alrea
 function openModal(html, opts={}){
   const root = $("#modalRoot");
   root.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog">${html}</div></div>`;
+  document.documentElement.style.overflow = "hidden"; document.body.style.overflow = "hidden";   // 창이 떠 있는 동안 뒤 화면 고정
   if(opts.onOpen) opts.onOpen(root);
   return root;
 }
-function closeModal(){ $("#modalRoot").innerHTML = ""; }
+function closeModal(){ $("#modalRoot").innerHTML = ""; document.documentElement.style.overflow = ""; document.body.style.overflow = ""; }
 // 큰 입력창 오른쪽 위 닫기 버튼 (아래 '취소' 버튼과 같은 동작)
 function addModalTopClose(){ const m = document.querySelector("#modalRoot .modal"); if(!m || m.querySelector(".mclose")) return; const h = m.querySelector("h3"); const b = document.createElement("button"); b.type = "button"; b.className = "ghost sm mclose"; b.textContent = "✕ 닫기"; b.onclick = closeModal; if(h){ const w = document.createElement("div"); w.className = "row between"; w.style.cssText = "align-items:center;gap:10px;margin-bottom:10px"; h.parentNode.insertBefore(w, h); h.style.margin = "0"; w.appendChild(h); w.appendChild(b); } else m.prepend(b); }
 function confirmModal(title, body, okLabel="확인", danger=false){
+  // 이미 다른 창이 떠 있으면 그 위에 겹쳐서 띄움 (아래 창 내용 유지)
+  if($("#modalRoot").innerHTML.trim()) return new Promise(res => {
+    const w = document.createElement("div"); w.className = "modal-bg"; w.style.zIndex = 70;
+    w.innerHTML = `<div class="modal" role="dialog" style="max-width:420px"><h3>${esc(title)}</h3><div>${body}</div><div class="btns"><button class="ghost" data-a="0">취소</button><button data-a="1" class="${danger?'danger':''}">${esc(okLabel)}</button></div></div>`;
+    document.body.appendChild(w); w.querySelectorAll("[data-a]").forEach(b => b.onclick = () => { w.remove(); res(b.dataset.a === "1"); });
+  });
   return new Promise(res => {
     openModal(`<h3>${esc(title)}</h3><div>${body}</div><div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk" class="${danger?'danger':''}">${esc(okLabel)}</button></div>`);
     $("#mCancel").onclick = () => { closeModal(); res(false); };
@@ -1725,75 +1738,12 @@ function fishRows(){
   return rows;
 }
 function fishFormModal(o){
-  const isNew = !o;
-  const qty = {}; (o && o.items || []).forEach(i => qty[i.id] = i.qty);
-  const res = fishReserved(o ? o.id : null);
-  const delivery0 = o && o.delivery === "parcel" ? "parcel" : "pickup";
-  const ship0 = o && o.delivery === "parcel" ? Number(o.shipFee)||0 : Number(FISHCFG.shipFee)||0; const bk = fishBank();
-  openModal(`<h3>${isNew ? "생선 전화예약 입력" : "생선 예약 수정"}</h3>
-    ${isNew && FISHCFG.open === false ? `<div class="emph" style="background:#fdecec;border-color:#f5b5b5;color:#b3261e">지금은 생선 예약 마감 상태입니다. 그래도 저장할 수는 있습니다.</div>` : ""}
-    <p class="hint" style="margin:0 0 4px">주문자명만 있으면 저장할 수 있고, 나머지는 나중에 '수정'으로 채워도 됩니다.</p>
-    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f">주문자명 <span style="color:var(--tc)">*</span></label><input id="fName" value="${esc(o ? o.name : "")}" placeholder="이름"></div><div style="flex:1;min-width:200px"><label class="f">전화번호</label><input id="fPhone" type="tel" inputmode="numeric" value="${esc(o ? fmtPhone(o.phone) : "")}" placeholder="010-1234-5678"></div></div>
-    <label class="f">예약 품목과 수량</label>
-    <div class="qgrid">${FISH_MENU.filter(m => m.active || qty[m.id]).map(m => `<div class="qrow ${qty[m.id] ? "on" : ""}"><div class="n">${esc(m.name)} <span style="color:var(--tc)">${won(m.price)}</span><small>${esc(m.spec)}${m.note ? ` · <b style="color:var(--tc-dark)">${esc(m.note)}</b>` : ""}</small>${Number(m.limit) ? `<span class="lim" data-lim="${m.id}"></span>` : ""}</div><div class="qty"><button type="button" data-qd="-1" data-for="${m.id}">−</button><input type="number" min="0" inputmode="numeric" data-q="${m.id}" value="${qty[m.id]||0}"><button type="button" data-qd="1" data-for="${m.id}">+</button></div></div>`).join("")}</div>
-    <div class="row between" style="margin-top:10px;padding:10px 12px;background:#f6f1eb;border-radius:12px"><span style="font-size:16px">합계 <span class="hint" id="fShipNote"></span></span><b id="fTotal" style="color:var(--tc);font-size:24px">${won(o ? o.total : 0)}</b></div>
-    <label class="f">받는 방법</label>
-    <div class="seg" id="fDel"><button type="button" data-dv="pickup" class="${delivery0==="pickup" ? "on" : ""}">매장 픽업</button><button type="button" data-dv="parcel" class="${delivery0==="parcel" ? "on" : ""}">택배</button></div>
-    <div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><label class="f" id="fDateL">${delivery0==="parcel" ? "발송 희망일" : "픽업 날짜"}</label><input id="fDate" type="date" value="${esc(o ? o.date||"" : "")}"></div>
-      <div style="flex:1;min-width:200px" id="fTimeBox" ${delivery0==="parcel" ? "hidden" : ""}><label class="f">픽업 시간</label><input id="fTime" value="${esc(o ? o.time||"" : "")}" placeholder="예: 오후 3시"></div></div>
-    <div id="fAddrBox" ${delivery0==="parcel" ? "" : "hidden"}><div class="row" style="gap:12px;flex-wrap:wrap"><div style="flex:3;min-width:220px"><label class="f">받는 주소</label><input id="fAddr" value="${esc(o ? o.address||"" : "")}" placeholder="택배 받으실 주소"></div><div style="flex:1;min-width:120px"><label class="f">택배비(원)</label><input id="fShip" type="number" inputmode="numeric" min="0" value="${ship0}"></div></div></div>
-    ${bk.account ? `<div class="hint" style="margin-top:8px;padding:8px 12px;background:#f6f1eb;border-radius:10px">계좌 안내: <b>${esc(bk.bank)} ${esc(fmtAcct(bk.account))}</b> (예금주 ${esc(bk.holder)}) · 금액 <b id="fTotal2">${won(o ? o.total : 0)}</b></div>` : ""}
-    <div style="margin-top:8px"><label class="f">요청사항</label><textarea id="fMemo" rows="3" placeholder="손질 요청, 통화 내용 등 자유롭게 적어 주세요">${esc(o ? o.memo||"" : "")}</textarea></div>
-    <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="fPaid" style="width:18px" ${o && o.paid ? "checked" : ""}>결제 완료</label>
-    <div class="err" id="fErr"></div>
-    <div class="btns"><button class="ghost" id="mCancel">취소</button><button id="mOk">${isNew ? "예약 저장" : "저장"}</button></div>`);
-  document.querySelector("#modalRoot .modal").classList.add("wide");
-  addModalTopClose();
-  let delivery = delivery0; let overOk = false;
-  const read = () => { const items = []; document.querySelectorAll("[data-q]").forEach(i => { const q = Math.max(0, Math.floor(Number(i.value)||0)); if(q > 0){ const m = FISH_MENU.find(x => x.id === i.dataset.q); items.push({ id:m.id, name:m.name, price:m.price, unit:m.unit, qty:q }); } }); return items; };
-  const over = () => read().filter(i => { const m = FISH_MENU.find(x => x.id === i.id); return m && Number(m.limit) && (res[i.id]||0) + i.qty > Number(m.limit); });
-  const calc = () => {
-    let t = 0;
-    document.querySelectorAll("[data-q]").forEach(i => { const m = FISH_MENU.find(x => x.id === i.dataset.q); const q = Number(i.value)||0; t += q * m.price; i.closest(".qrow").classList.toggle("on", q > 0);
-      const l = document.querySelector(`[data-lim="${m.id}"]`); if(l){ const left = Number(m.limit) - (res[m.id]||0) - q; l.className = "lim" + (left < 0 ? " over" : ""); l.textContent = left < 0 ? `한정 ${m.limit} · ${-left}개 초과!` : `한정 ${m.limit} · 남은 수량 ${left}`; } });
-    const sf = delivery === "parcel" ? Math.max(0, Number($("#fShip").value)||0) : 0; t += sf; $("#fShipNote").textContent = sf ? `(택배비 ${won(sf)} 포함)` : "";
-    $("#fTotal").textContent = won(t); const t2 = $("#fTotal2"); if(t2) t2.textContent = won(t); overOk = false; $("#fErr").textContent = "";
-  };
-  calc(); $("#fShip").oninput = calc;
-  setTimeout(() => { const n = $("#fName"); if(n && !n.value) n.focus(); }, 50);
-  document.querySelectorAll("[data-q]").forEach(i => i.oninput = calc);
-  document.querySelectorAll("[data-qd]").forEach(b => b.onclick = () => { const i = document.querySelector(`[data-q="${b.dataset.for}"]`); i.value = Math.max(0, (Number(i.value)||0) + Number(b.dataset.qd)); calc(); });
-  document.querySelectorAll("[data-dv]").forEach(b => b.onclick = () => { delivery = b.dataset.dv; document.querySelectorAll("[data-dv]").forEach(x => x.classList.toggle("on", x === b)); $("#fTimeBox").hidden = delivery === "parcel"; $("#fAddrBox").hidden = delivery !== "parcel"; $("#fDateL").textContent = delivery === "parcel" ? "발송 희망일" : "픽업 날짜"; calc(); if(delivery === "parcel") $("#fAddr").focus(); });
-  $("#mCancel").onclick = closeModal;
-  $("#mOk").onclick = async () => {
-    const name = $("#fName").value.trim(); const phone = digits($("#fPhone").value);
-    const err = !name ? "주문자명을 입력해 주세요." : (phone && !/^0\d{8,10}$/.test(phone)) ? "전화번호가 이상합니다. 모르면 비워두세요." : "";
-    if(err){ $("#fErr").textContent = err; return; }
-    const items = read();
-    const ov = over();
-    if(ov.length && !overOk){ overOk = true; $("#fErr").textContent = `한정 수량을 넘는 품목이 있습니다 (${ov.map(i => i.name).join(", ")}). 그래도 저장하려면 '${isNew ? "예약 저장" : "저장"}'을 한 번 더 누르세요.`; return; }
-    const paid = $("#fPaid").checked;
-    const shipFee = delivery === "parcel" ? Math.max(0, Number($("#fShip").value)||0) : 0;
-    const data = { kind:"fish", name, phone, items, shipFee, total: items.reduce((s,i) => s + i.price*i.qty, 0) + shipFee, qtyTotal: items.reduce((s,i) => s + i.qty, 0), delivery, date:$("#fDate").value, time: delivery === "parcel" ? "" : $("#fTime").value.trim(), address: delivery === "parcel" ? $("#fAddr").value.trim() : "", memo:$("#fMemo").value.trim(), paid, updatedAt:DB.ts() };
-    const btn = $("#mOk"); btn.disabled = true;
-    const desc = `${name}${phone ? "(" + fmtPhone(phone) + ")" : ""} ${won(data.total)} / ${items.map(i => i.name + "×" + i.qty).join(", ") || "품목 없음"} / ${fishWhen(data)}${data.address ? " " + data.address : ""}${paid ? " / 결제완료" : ""}`;
-    try {
-      if(isNew){
-        Object.assign(data, { uid:"fish:" + (phone || Date.now()), source:"phone", status:"active", createdAt:DB.ts(), paidAt: paid ? DB.ts() : null, createdBy: isStaff ? "staff" : "admin" });
-        const id = await DB.add(C.orders, data);
-        await log("fish_order", `생선 전화예약 ${desc} (${id})`);
-        toast("생선 예약이 저장되었습니다");
-      } else {
-        if(paid && !o.paid) data.paidAt = DB.ts(); if(!paid) data.paidAt = null;
-        await DB.update(C.orders, o.id, data);
-        await log("fish_edit", `생선 예약 수정 ${desc} (${o.id})`);
-        toast("저장되었습니다");
-      }
-      closeModal();
-    } catch(e){ btn.disabled = false; $("#fErr").textContent = authMsg(e); }
-  };
+  const qty = {}; (o.items||[]).forEach(i => qty[i.id] = Number(i.qty)||0);
+  const d = { qty, name:o.name||"", phone:o.phone ? fmtPhone(o.phone) : "", delivery: o.delivery === "parcel" ? "parcel" : "pickup", date:o.date||"", time:o.time||"", address:o.address||"", shipFee: o.delivery === "parcel" ? Number(o.shipFee)||0 : Number(FISHCFG.shipFee)||0, paid:!!o.paid, memo:o.memo||"" };
+  openModal(`<div id="fxEditRoot"></div>`);
+  const m = document.querySelector("#modalRoot .modal"); m.classList.add("fx-modal");
+  fxOrderForm($("#fxEditRoot"), d, { edit:o });
 }
-
 /* ===================== 생선예약 새 화면 (판매 화면 스타일) ===================== */
 const FX_COLORS = ["#fde4d7","#dcefe6","#f9e0e3","#eef2dc","#e6e2f6","#efe9e2","#e0ebf7"];
 const FX_RING = ["#e9a27f","#6dbb95","#e48b97","#a7bf5f","#9b8ad6","#b9a48f","#7ea6d8"];
@@ -1830,13 +1780,15 @@ function renderFishShell(app){
 }
 const fishNotices = () => `${FISHCFG.open === false ? `<div class="fx-notice closed">지금은 생선 예약 마감 상태입니다.${FISHCFG.closedNote ? " " + esc(FISHCFG.closedNote) : ""}</div>` : ""}${FISHCFG.notice ? `<div class="fx-notice memo"><b>직원 안내</b>\n${esc(FISHCFG.notice)}</div>` : ""}`;
 // 입력 중에 다른 기기의 변경이 들어오면 화면을 새로 그리지 않고 남은 수량만 고침
-function fxEntryLive(){ const res = fishReserved(); FISH_MENU.forEach(m => { const el = document.querySelector(`[data-left="${m.id}"]`); if(!el) return; const lim = Number(m.limit)||0; const left = lim - (res[m.id]||0) - (Number(fishDraft.qty[m.id])||0); el.className = "fx-tag " + (left < 0 ? "over" : "ok"); el.textContent = left < 0 ? `한정 ${lim} · ${-left} 초과` : `한정 ${lim} · 남음 ${left}`; const ov = document.querySelector(`[data-over="${m.id}"]`); if(ov){ ov.hidden = left >= 0; ov.textContent = `한정 ${-left} 초과`; } }); }
-function renderFishEntry(body){
-  if(!fishDraft) fishDraft = newFishDraft();
-  const d = fishDraft; const bk = fishBank();
+function fxLive(d, res){ FISH_MENU.forEach(m => { const el = document.querySelector(`[data-left="${m.id}"]`); if(!el) return; const lim = Number(m.limit)||0; const left = lim - (res[m.id]||0) - (Number(d.qty[m.id])||0); el.className = "fx-tag " + (left < 0 ? "over" : "ok"); el.textContent = left < 0 ? `한정 ${lim} · ${-left} 초과` : `한정 ${lim} · 남음 ${left}`; }); }
+function fxEntryLive(){ if(fishDraft) fxLive(fishDraft, fishReserved()); }
+function renderFishEntry(body){ if(!fishDraft) fishDraft = newFishDraft(); fxOrderForm(body, fishDraft, {}); }
+// 예약 입력·수정 공용 화면. opt.edit 이 있으면 그 예약을 고치는 창
+function fxOrderForm(body, d, opt){
+  const E = opt.edit || null; const bk = fishBank();
   const items = FISH_MENU.filter(m => m.active || d.qty[m.id]);
-  body.innerHTML = `<div id="fxEntry">${fishNotices()}
-    ${fishLastSaved ? `<div class="fx-done">✓ 방금 등록: ${esc(fishLastSaved.name)} · ${won(fishLastSaved.total)}<button class="fx-pill" id="xGoList" style="margin-left:auto">예약명단 보기</button></div>` : ""}
+  body.innerHTML = `<div id="${E ? "fxEdit" : "fxEntry"}">${E ? `<div class="fx-mhead"><h3>예약 수정 <span>${esc(E.name)}님</span></h3><button class="fx-pill" id="xClose">✕ 닫기</button></div>` : fishNotices()}
+    ${!E && fishLastSaved ? `<div class="fx-done">✓ 방금 등록: ${esc(fishLastSaved.name)} · ${won(fishLastSaved.total)}<button class="fx-pill" id="xGoList" style="margin-left:auto">예약명단 보기</button></div>` : ""}
     <div class="fx-grid">
       <div><div class="fx-items">${items.map((m,i) => `<div class="fx-item" style="--c:${FX_COLORS[i % FX_COLORS.length]}" data-item="${m.id}">
           <div class="nm" data-tap="${m.id}"><b>${esc(m.name)}</b><span class="pr">${won(m.price)}</span>${Number(m.limit) ? `<span class="fx-tag ok" data-left="${m.id}"></span>` : ""}</div>
@@ -1848,20 +1800,20 @@ function renderFishEntry(body){
         <div class="row" style="gap:10px"><div style="flex:1"><label class="fx-lb">주문자명 *</label><input class="fx-in" id="xName" value="${esc(d.name)}" placeholder="이름"></div><div style="flex:1.2"><label class="fx-lb">전화번호</label><input class="fx-in" id="xPhone" type="tel" inputmode="numeric" value="${esc(d.phone)}" placeholder="010-1234-5678"></div></div>
         <label class="fx-lb">받는 방법</label><div class="fx-seg"><button type="button" data-xd="pickup" class="${d.delivery==="pickup" ? "on" : ""}">매장 픽업</button><button type="button" data-xd="parcel" class="${d.delivery==="parcel" ? "on" : ""}">택배</button></div>
         <label class="fx-lb"><span id="xDateL">${d.delivery==="parcel" ? "발송 희망일" : "픽업 날짜"}</span>${FISHCFG.defDate ? ` <span style="font-weight:500">— 기본 ${esc(fmtPickDate(FISHCFG.defDate))}${FISHCFG.defTime ? " " + esc(FISHCFG.defTime) : ""}, 늦게 원하시면 날짜를 바꿔 주세요</span>` : ""}</label>
-        <div class="row" style="gap:10px"><input class="fx-in" id="xDate" type="date" value="${esc(d.date)}" ${FISHCFG.defDate ? `min="${esc(FISHCFG.defDate)}"` : ""} style="flex:1"><input class="fx-in" id="xTime" value="${esc(d.time)}" placeholder="픽업 시간 (예: 오후 3시)" style="flex:1" ${d.delivery==="parcel" ? "hidden" : ""}></div>
+        <div class="row" style="gap:10px"><input class="fx-in" id="xDate" type="date" value="${esc(d.date)}" ${FISHCFG.defDate && !E ? `min="${esc(FISHCFG.defDate)}"` : ""} style="flex:1"><input class="fx-in" id="xTime" value="${esc(d.time)}" placeholder="픽업 시간 (예: 오후 3시)" style="flex:1" ${d.delivery==="parcel" ? "hidden" : ""}></div>
         <div id="xParcel" ${d.delivery==="parcel" ? "" : "hidden"}><div class="row" style="gap:10px"><div style="flex:3"><label class="fx-lb">받는 주소</label><input class="fx-in" id="xAddr" value="${esc(d.address)}" placeholder="택배 받으실 주소"></div><div style="flex:1;min-width:90px"><label class="fx-lb">택배비</label><input class="fx-in" id="xShip" type="number" inputmode="numeric" min="0" value="${Number(d.shipFee)||0}"></div></div></div>
         <label class="fx-lb">결제</label><div class="fx-seg"><button type="button" data-xpay="0" class="${d.paid ? "" : "on"}">미결제</button><button type="button" data-xpay="1" class="${d.paid ? "on" : ""}">결제완료</button></div>
         <div class="fx-sum"><div class="r"><span>상품 합계</span><span id="xSub">0원</span></div><div class="r" id="xShipRow" hidden><span>택배비</span><span id="xShipV"></span></div><div class="t"><span>결제 금액</span><b id="xTotal">0원</b></div></div>
         ${bk.account ? `<div class="fx-bank">계좌 안내 <b>${esc(bk.bank)} ${esc(fmtAcct(bk.account))}</b> (${esc(bk.holder)})</div>` : ""}
         <label class="fx-lb">요청사항</label><input class="fx-in" id="xMemo" value="${esc(d.memo)}" placeholder="손질 요청, 통화 내용 등">
         <div class="err" id="xErr"></div>
-        <div class="fx-acts" style="margin:6px 0 0"><button class="rs" id="xReset">↻ 초기화</button><button class="sv" id="xSave">예약 등록</button></div>
+        <div class="fx-acts" style="margin:6px 0 0">${E ? `<button class="rs" id="xReset">닫기</button><button class="sv" id="xSave">수정 저장</button>` : `<button class="rs" id="xReset">↻ 초기화</button><button class="sv" id="xSave">예약 등록</button>`}</div>
       </div></div></div>`;
-  const res = fishReserved(); let overOk = false;
+  const res = fishReserved(E ? E.id : null); let overOk = false;
   const totals = () => { const sub = FISH_MENU.reduce((s,m) => s + (Number(d.qty[m.id])||0) * m.price, 0); const ship = d.delivery === "parcel" ? Math.max(0, Number(d.shipFee)||0) : 0; return { sub, ship, total: sub + ship }; };
   const update = () => {
     FISH_MENU.forEach(m => { const q = Number(d.qty[m.id])||0; const v = document.querySelector(`[data-xv="${m.id}"]`); if(v) v.textContent = q; const it = document.querySelector(`[data-item="${m.id}"]`); if(it) it.classList.toggle("on", q > 0); });
-    fxEntryLive();
+    fxLive(d, res);
     const t = totals(); $("#xSub").textContent = won(t.sub); $("#xShipRow").hidden = !t.ship; $("#xShipV").textContent = won(t.ship); $("#xTotal").textContent = won(t.total);
     const chosen = FISH_MENU.filter(m => d.qty[m.id] > 0);
     $("#xChosen").innerHTML = chosen.length ? chosen.map(m => `<div class="ln"><span>${esc(m.name)} × <b>${d.qty[m.id]}</b></span><b>${won(m.price * d.qty[m.id])}</b></div>`).join("") : `<div class="hint">상품의 + 를 눌러 수량을 담아 주세요</div>`;
@@ -1879,7 +1831,8 @@ function renderFishEntry(body){
   body.querySelectorAll("[data-xd]").forEach(b => b.onclick = () => { d.delivery = b.dataset.xd; body.querySelectorAll("[data-xd]").forEach(x => x.classList.toggle("on", x === b)); $("#xParcel").hidden = d.delivery !== "parcel"; $("#xTime").hidden = d.delivery === "parcel"; $("#xDateL").textContent = d.delivery === "parcel" ? "발송 희망일" : "픽업 날짜"; update(); if(d.delivery === "parcel") $("#xAddr").focus(); });
   body.querySelectorAll("[data-xpay]").forEach(b => b.onclick = () => { d.paid = b.dataset.xpay === "1"; body.querySelectorAll("[data-xpay]").forEach(x => x.classList.toggle("on", x === b)); });
   $("#xClearItems").onclick = () => { d.qty = {}; update(); };
-  $("#xReset").onclick = async () => { if((d.name || Object.values(d.qty).some(q => q > 0)) && !(await confirmModal("초기화", "입력한 내용을 모두 지울까요?", "지우기"))) return; fishDraft = newFishDraft(); fishLastSaved = null; render(); };
+  if(E){ $("#xReset").onclick = closeModal; $("#xClose").onclick = closeModal; }
+  else $("#xReset").onclick = async () => { if((d.name || Object.values(d.qty).some(q => q > 0)) && !(await confirmModal("초기화", "입력한 내용을 모두 지울까요?", "지우기"))) return; fishDraft = newFishDraft(); fishLastSaved = null; render(); };
   const gl = $("#xGoList"); if(gl) gl.onclick = () => { fishTab = "list"; render(); window.scrollTo(0,0); };
   $("#xSave").onclick = async () => {
     const name = d.name.trim(); const phone = digits(d.phone);
@@ -1890,6 +1843,14 @@ function renderFishEntry(body){
     const over = items.filter(i => { const m = FISH_MENU.find(x => x.id === i.id); return m && Number(m.limit) && (res[i.id]||0) + i.qty > Number(m.limit); });
     if(over.length && !overOk && !(await confirmModal("한정 수량 초과", `<b>${over.map(i => esc(i.name)).join(", ")}</b>의 한정 수량을 넘습니다. 그래도 저장할까요?`, "그래도 저장", true))) return;
     const t = totals(); const paid = !!d.paid;
+    if(E){
+      const upd = { name, phone, items, shipFee:t.ship, total:t.total, qtyTotal:items.reduce((s,i) => s + i.qty, 0), delivery:d.delivery, date:d.date, time: d.delivery === "parcel" ? "" : d.time.trim(), address: d.delivery === "parcel" ? d.address.trim() : "", memo:d.memo.trim(), paid, updatedAt:DB.ts() };
+      if(paid && !E.paid) upd.paidAt = DB.ts(); if(!paid) upd.paidAt = null;
+      const btn = $("#xSave"); btn.disabled = true;
+      try { await DB.update(C.orders, E.id, upd); await log("fish_edit", `생선 예약 수정 ${name}${phone ? "(" + fmtPhone(phone) + ")" : ""} ${won(upd.total)} / ${items.map(i => i.name + "×" + i.qty).join(", ") || "품목 없음"} / ${fishWhen(upd)}${upd.address ? " " + upd.address : ""}${paid ? " / 결제완료" : ""} (${E.id})`); closeModal(); toast("수정되었습니다"); }
+      catch(e){ btn.disabled = false; $("#xErr").textContent = authMsg(e); }
+      return;
+    }
     const data = { kind:"fish", name, phone, items, shipFee:t.ship, total:t.total, qtyTotal:items.reduce((s,i) => s + i.qty, 0), delivery:d.delivery, date:d.date, time: d.delivery === "parcel" ? "" : d.time.trim(), address: d.delivery === "parcel" ? d.address.trim() : "", memo:d.memo.trim(), paid, paidAt: paid ? DB.ts() : null, uid:"fish:" + (phone || Date.now()), source:"phone", status:"active", createdAt:DB.ts(), updatedAt:DB.ts(), createdBy: isStaff ? "staff" : "admin" };
     const btn = $("#xSave"); btn.disabled = true;
     try {
